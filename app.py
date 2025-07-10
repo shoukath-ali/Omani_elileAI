@@ -1,616 +1,620 @@
 """
-Omani Mental Health Chatbot - Streamlit Frontend
-A simple, compassionate mental health support chatbot
+Omani Mental Health Voice-Enabled Chatbot
+Enhanced with Azure Speech Services for real-time voice interaction
 """
 
 import streamlit as st
-import os
-from datetime import datetime
-from dotenv import load_dotenv
+import asyncio
+import base64
+import time
+import logging
+from typing import Dict, Any, Optional
+import io
+import tempfile
 
-# Try importing chatbot with error handling
-try:
-    from chatbot import OmaniMentalHealthBot
-except ImportError as e:
-    st.error(f"Error importing chatbot: {e}")
-    st.stop()
-
-# Load environment variables
-load_dotenv()
-
-# Page configuration
+# Configure page FIRST (before any other Streamlit commands)
 st.set_page_config(
-    page_title="Omani Mental Health Chatbot",
-    page_icon="🧠",
+    page_title="المساعد النفسي العماني الصوتي | Omani Voice Mental Health Assistant",
+    page_icon="🎤",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for dark theme with black background
-st.markdown("""
+# Import our services after page config
+from chatbot import OmaniMentalHealthChatbot
+from voice_service import get_voice_service, test_voice_setup, sync_speech_to_text, sync_text_to_speech
+
+# Streamlit audio recording imports
+try:
+    from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
+    from streamlit_mic_recorder import mic_recorder
+    AUDIO_AVAILABLE = True
+except ImportError:
+    AUDIO_AVAILABLE = False
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Dark theme CSS with voice interface styling
+DARK_THEME_CSS = """
 <style>
-    /* Main app background */
-    .stApp {
-        background-color: #000000;
-        color: #FFFFFF;
-    }
-    
-    /* Sidebar background */
-    .css-1d391kg {
-        background-color: #111111;
-    }
-    
-    /* Main content area */
-    .block-container {
-        background-color: #000000;
-        padding-top: 2rem;
-    }
-    
-    /* Header styling */
-    .main-header {
-        text-align: center;
-        background: linear-gradient(90deg, #00FF88, #00AAFF);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        font-size: 3rem;
-        font-weight: bold;
-        margin-bottom: 1rem;
-    }
-    
-    .subtitle {
-        text-align: center;
-        color: #CCCCCC;
-        font-size: 1.2rem;
-        margin-bottom: 2rem;
-    }
-    
-    /* Chat message styling */
-    .chat-message {
-        padding: 1rem;
-        border-radius: 10px;
-        margin: 0.5rem 0;
-        border: 1px solid #333333;
-    }
-    
-    .user-message {
-        background-color: #1E3A8A;
-        border-left: 4px solid #3B82F6;
-        color: #FFFFFF;
-    }
-    
-    .bot-message {
-        background-color: #166534;
-        border-left: 4px solid #22C55E;
-        color: #FFFFFF;
-    }
-    
-    .system-message {
-        background-color: #1F2937;
-        border-left: 4px solid #6B7280;
-        color: #D1D5DB;
-        font-style: italic;
-    }
-    
-    .warning-message {
-        background-color: #451A03;
-        border-left: 4px solid #F59E0B;
-        color: #FEF3C7;
-    }
-    
-    .error-message {
-        background-color: #7F1D1D;
-        border-left: 4px solid #EF4444;
-        color: #FEE2E2;
-    }
-    
-    .transcription {
-        background-color: #292524;
-        border-left: 4px solid #F97316;
-        color: #FDBA74;
-        font-style: italic;
-    }
-    
-    /* Warning and crisis boxes */
-    .warning-box {
-        background-color: #451A03;
-        border: 2px solid #F59E0B;
-        border-radius: 8px;
-        padding: 1rem;
-        margin: 1rem 0;
-        color: #FEF3C7;
-    }
-    
-    .crisis-box {
-        background-color: #7F1D1D;
-        border: 3px solid #EF4444;
-        border-radius: 8px;
-        padding: 1.5rem;
-        margin: 1rem 0;
-        color: #FEE2E2;
-        animation: pulse 2s infinite;
-    }
-    
-    @keyframes pulse {
-        0% { border-color: #EF4444; }
-        50% { border-color: #F87171; }
-        100% { border-color: #EF4444; }
-    }
-    
-    /* Buttons styling */
-    .stButton > button {
-        background-color: #1F2937;
-        color: #FFFFFF;
-        border: 2px solid #374151;
-        border-radius: 8px;
-        font-weight: bold;
-        transition: all 0.3s ease;
-    }
-    
-    .stButton > button:hover {
-        background-color: #374151;
-        border-color: #4B5563;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0, 255, 136, 0.3);
-    }
-    
-    /* Primary button styling */
-    .stButton > button[kind="primary"] {
-        background: linear-gradient(45deg, #00FF88, #00AAFF);
-        color: #000000;
-        border: none;
-        font-weight: bold;
-    }
-    
-    .stButton > button[kind="primary"]:hover {
-        background: linear-gradient(45deg, #00AAFF, #00FF88);
-        transform: translateY(-2px);
-        box-shadow: 0 6px 12px rgba(0, 255, 136, 0.4);
-    }
-    
-    /* Input fields */
-    .stTextInput > div > div > input {
-        background-color: #1F2937;
-        color: #FFFFFF;
-        border: 2px solid #374151;
-        border-radius: 8px;
-    }
-    
-    .stTextInput > div > div > input:focus {
-        border-color: #00FF88;
-        box-shadow: 0 0 0 2px rgba(0, 255, 136, 0.2);
-    }
-    
-    .stTextArea > div > div > textarea {
-        background-color: #1F2937;
-        color: #FFFFFF;
-        border: 2px solid #374151;
-        border-radius: 8px;
-    }
-    
-    .stTextArea > div > div > textarea:focus {
-        border-color: #00FF88;
-        box-shadow: 0 0 0 2px rgba(0, 255, 136, 0.2);
-    }
-    
-    /* Selectbox styling */
-    .stSelectbox > div > div {
-        background-color: #1F2937;
-        color: #FFFFFF;
-        border: 2px solid #374151;
-        border-radius: 8px;
-    }
-    
-    /* Slider styling */
-    .stSlider > div > div {
-        background-color: #1F2937;
-    }
-    
-    /* Expander styling */
-    .streamlit-expanderHeader {
-        background-color: #1F2937;
-        color: #FFFFFF;
-        border: 2px solid #374151;
-        border-radius: 8px;
-    }
-    
-    .streamlit-expanderContent {
-        background-color: #111111;
-        border: 2px solid #374151;
-        border-top: none;
-        border-radius: 0 0 8px 8px;
-    }
-    
-    /* Sidebar styling */
-    .css-1d391kg {
-        background-color: #111111;
-        border-right: 2px solid #374151;
-    }
-    
-    /* Sidebar text */
-    .css-1d391kg .stMarkdown {
-        color: #FFFFFF;
-    }
-    
-    /* Metrics styling */
-    .metric-container {
-        background-color: #1F2937;
-        padding: 1rem;
-        border-radius: 8px;
-        border: 2px solid #374151;
-        margin: 0.5rem 0;
-    }
-    
-    /* Hide Streamlit branding */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
-    
-    /* Custom scrollbar */
-    ::-webkit-scrollbar {
-        width: 10px;
-    }
-    
-    ::-webkit-scrollbar-track {
-        background: #111111;
-    }
-    
-    ::-webkit-scrollbar-thumb {
-        background: #374151;
-        border-radius: 5px;
-    }
-    
-    ::-webkit-scrollbar-thumb:hover {
-        background: #4B5563;
-    }
+/* Main app background */
+.stApp {
+    background: linear-gradient(135deg, #000000 0%, #0a0a0a 100%);
+    color: #FFFFFF;
+}
+
+/* Sidebar */
+.css-1d391kg {
+    background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
+    border-right: 2px solid #00FF88;
+}
+
+/* Voice interface controls */
+.voice-controls {
+    background: linear-gradient(135deg, #111111, #222222);
+    border: 2px solid #00FF88;
+    border-radius: 15px;
+    padding: 20px;
+    margin: 10px 0;
+    box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+}
+
+.voice-status {
+    background: linear-gradient(90deg, #00FF88, #00AAFF);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: bold;
+    font-size: 1.2em;
+    text-align: center;
+    padding: 10px;
+    animation: pulse 2s infinite;
+}
+
+/* Voice buttons */
+.voice-button {
+    background: linear-gradient(45deg, #00FF88, #00AAFF);
+    border: none;
+    border-radius: 50%;
+    width: 80px;
+    height: 80px;
+    margin: 10px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2em;
+}
+
+.voice-button:hover {
+    transform: scale(1.1);
+    box-shadow: 0 0 30px rgba(0, 255, 136, 0.8);
+}
+
+.recording {
+    animation: pulse 1s infinite;
+    box-shadow: 0 0 50px rgba(255, 0, 0, 0.8);
+    background: linear-gradient(45deg, #FF0000, #FF6600);
+}
+
+/* Chat messages with voice indicators */
+.user-message {
+    background: linear-gradient(135deg, #001122, #003344);
+    border-left: 4px solid #00FF88;
+    padding: 15px;
+    margin: 10px 0;
+    border-radius: 10px;
+    position: relative;
+}
+
+.bot-message {
+    background: linear-gradient(135deg, #220011, #330022);
+    border-left: 4px solid #00AAFF;
+    padding: 15px;
+    margin: 10px 0;
+    border-radius: 10px;
+    position: relative;
+}
+
+.voice-indicator {
+    position: absolute;
+    top: 5px;
+    right: 10px;
+    font-size: 1.2em;
+    opacity: 0.7;
+}
+
+/* Audio player styling */
+.stAudio {
+    border-radius: 10px;
+    background: #111111;
+    border: 1px solid #00FF88;
+}
+
+/* Processing status */
+.processing-status {
+    background: linear-gradient(45deg, #FFD700, #FFA500);
+    color: #000000;
+    padding: 10px;
+    border-radius: 10px;
+    text-align: center;
+    font-weight: bold;
+    margin: 10px 0;
+    animation: pulse 1.5s infinite;
+}
+
+/* Latency indicator */
+.latency-good { color: #00FF88; }
+.latency-ok { color: #FFD700; }
+.latency-poor { color: #FF6600; }
+.latency-bad { color: #FF0000; }
+
+/* Voice quality indicator */
+.voice-quality {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    background: rgba(0, 255, 136, 0.1);
+    border-radius: 10px;
+    margin: 10px 0;
+}
+
+.quality-bar {
+    width: 100%;
+    height: 8px;
+    background: #333333;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.quality-fill {
+    height: 100%;
+    transition: width 0.3s ease;
+}
+
+/* Crisis alert for voice mode */
+.voice-crisis-alert {
+    background: linear-gradient(45deg, #FF0000, #FF6600);
+    color: #FFFFFF;
+    padding: 20px;
+    border-radius: 15px;
+    text-align: center;
+    margin: 20px 0;
+    border: 3px solid #FFFFFF;
+    animation: emergency-pulse 1s infinite;
+    box-shadow: 0 0 50px rgba(255, 0, 0, 0.8);
+}
+
+@keyframes emergency-pulse {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.05); opacity: 0.8; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+/* Animations */
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+/* Hide Streamlit elements */
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+header {visibility: hidden;}
 </style>
-""", unsafe_allow_html=True)
+"""
 
-def initialize_chatbot():
-    """Initialize the chatbot with error handling"""
-    try:
-        return OmaniMentalHealthBot()
-    except Exception as e:
-        st.error(f"Failed to initialize chatbot: {str(e)}")
-        st.stop()
-
-def display_crisis_resources():
-    """Display crisis resources in sidebar"""
-    st.sidebar.markdown("## 🆘 Crisis Resources")
-    st.sidebar.markdown("""
-    **If you're having thoughts of self-harm:**
-    
-    🇴🇲 **Oman:**
-    - Emergency: 9999
-    - Mental Health Helpline: Call your local health center
-    
-    🌍 **International:**
-    - Crisis Text Line: Text HOME to 741741
-    - International Association for Suicide Prevention: https://www.iasp.info/resources/Crisis_Centres/
-    
-    **Remember: You're not alone, and help is available.**
-    """)
-
-def display_disclaimer():
-    """Display important disclaimer"""
-    with st.expander("⚠️ Important Disclaimer - Please Read"):
-        st.markdown("""
-        **This chatbot is for informational and emotional support purposes only.**
-        
-        - 🏥 **Not a replacement for professional medical care**
-        - 👨‍⚕️ **Always consult healthcare professionals for medical advice**
-        - 🆘 **In crisis situations, contact emergency services immediately**
-        - 🔒 **Your conversations are not stored or shared**
-        - 🇴🇲 **Designed with Omani cultural context in mind**
-        
-        By using this chatbot, you acknowledge these limitations and agree to seek professional help when needed.
-        """)
-
-def main():
-    """Main application function"""
-    
-    # Header
-    st.markdown('<h1 class="main-header">🧠 Omani Mental Health Chatbot</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">Your compassionate companion for mental wellness • رفيقك الرحيم للصحة النفسية</p>', unsafe_allow_html=True)
-    
-    # Sidebar
-    st.sidebar.title("🛠️ Settings")
-    
-    # Display crisis resources
-    display_crisis_resources()
-    
-    # Model selection
-    available_models = ["gpt-3.5-turbo", "gpt-4 (if available)", "claude-3-sonnet-20240229 (if available)"]
-    selected_model_display = st.sidebar.selectbox(
-        "Select AI Model",
-        available_models,
-        index=0,
-        help="Choose the AI model for responses. GPT-3.5-turbo is most widely available."
-    )
-    
-    # Map display names to actual model names
-    model_mapping = {
-        "gpt-3.5-turbo": "gpt-3.5-turbo",
-        "gpt-4 (if available)": "gpt-4",
-        "claude-3-sonnet-20240229 (if available)": "claude-3-sonnet-20240229"
-    }
-    selected_model = model_mapping.get(selected_model_display, "gpt-3.5-turbo")
-    
-    # Model access info
-    if selected_model != "gpt-3.5-turbo":
-        st.sidebar.info("ℹ️ If the selected model is not accessible, the system will automatically fallback to GPT-3.5-turbo.")
-    else:
-        st.sidebar.success("✅ GPT-3.5-turbo is available to all OpenAI accounts.")
-    
-    # Temperature control
-    temperature = st.sidebar.slider(
-        "Response Creativity",
-        min_value=0.0,
-        max_value=1.0,
-        value=0.7,
-        step=0.1,
-        help="Lower = more focused, Higher = more creative"
-    )
-    
-    # Language preference
-    language = st.sidebar.selectbox(
-        "Language / اللغة",
-        ["English", "Arabic", "Both / كلاهما"],
-        help="Select your preferred language"
-    )
-    
-    # Display disclaimer
-    display_disclaimer()
-    
-    # Initialize chatbot
+def initialize_session_state():
+    """Initialize session state variables"""
+    if 'messages' not in st.session_state:
+        st.session_state.messages = []
+    if 'conversation_id' not in st.session_state:
+        st.session_state.conversation_id = f"session_{int(time.time())}"
     if 'chatbot' not in st.session_state:
-        st.session_state.chatbot = initialize_chatbot()
-        st.session_state.chatbot.set_model(selected_model)
-        st.session_state.chatbot.set_temperature(temperature)
-        st.session_state.chatbot.set_language(language)
+        st.session_state.chatbot = OmaniMentalHealthChatbot()
+    if 'voice_service' not in st.session_state:
+        st.session_state.voice_service = get_voice_service()
+    if 'voice_enabled' not in st.session_state:
+        st.session_state.voice_enabled = True
+    if 'is_recording' not in st.session_state:
+        st.session_state.is_recording = False
+    if 'last_audio' not in st.session_state:
+        st.session_state.last_audio = None
+    if 'voice_stats' not in st.session_state:
+        st.session_state.voice_stats = {
+            'total_interactions': 0,
+            'avg_latency': 0,
+            'successful_stt': 0,
+            'successful_tts': 0
+        }
+
+def render_voice_controls():
+    """Render voice interface controls"""
+    st.markdown('<div class="voice-controls">', unsafe_allow_html=True)
     
-    # Update chatbot settings if changed
-    if (st.session_state.get('prev_model') != selected_model or 
-        st.session_state.get('prev_temp') != temperature or
-        st.session_state.get('prev_lang') != language):
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        st.markdown("### 🎤 واجهة صوتية | Voice Interface")
         
-        st.session_state.chatbot.set_model(selected_model)
-        st.session_state.chatbot.set_temperature(temperature)
-        st.session_state.chatbot.set_language(language)
-        st.session_state.prev_model = selected_model
-        st.session_state.prev_temp = temperature
-        st.session_state.prev_lang = language
+        # Voice service status
+        voice_status = test_voice_setup()
+        if voice_status["success"]:
+            status_color = "latency-good"
+            status_text = "✅ Voice service active"
+        else:
+            status_color = "latency-bad"
+            status_text = f"❌ Voice service error: {voice_status.get('error', 'Unknown')}"
         
-        # Add a system message about model change
-        if st.session_state.get('prev_model') != selected_model and st.session_state.get('prev_model') is not None:
-            st.session_state.chat_history.append({
-                'role': 'system',
-                'content': f'🔄 Model changed to {selected_model_display}. Conversation continues...',
-                'timestamp': datetime.now()
-            })
+        st.markdown(f'<div class="{status_color}">{status_text}</div>', unsafe_allow_html=True)
+        
+        # Audio recording section
+        if AUDIO_AVAILABLE:
+            st.markdown("#### Record your voice:")
+            
+            # Use streamlit-mic-recorder
+            audio_data = mic_recorder(
+                start_prompt="🎤 Start Recording",
+                stop_prompt="⏹️ Stop Recording",
+                key="voice_recorder",
+                format="wav",
+                just_once=False
+            )
+            
+            if audio_data is not None:
+                st.session_state.last_audio = audio_data
+                st.success("Audio recorded! Processing...")
+                process_voice_input(audio_data['bytes'])
+        else:
+            st.warning("Audio recording not available. Install: pip install streamlit-webrtc streamlit-mic-recorder")
+            
+        # Voice settings
+        with st.expander("🔧 Voice Settings"):
+            col_a, col_b = st.columns(2)
+            
+            with col_a:
+                voice_quality = st.selectbox(
+                    "Voice Quality",
+                    ["high", "medium", "low"],
+                    index=0
+                )
+                
+            with col_b:
+                voice_speed = st.slider(
+                    "Speech Speed",
+                    min_value=0.5,
+                    max_value=2.0,
+                    value=0.9,
+                    step=0.1
+                )
+                
+        # Voice statistics
+        stats = st.session_state.voice_stats
+        st.markdown("#### 📊 Voice Statistics")
+        col_s1, col_s2, col_s3 = st.columns(3)
+        
+        with col_s1:
+            st.metric("Total Interactions", stats['total_interactions'])
+        with col_s2:
+            latency_class = get_latency_class(stats['avg_latency'])
+            st.metric("Avg Latency", f"{stats['avg_latency']:.2f}s")
+        with col_s3:
+            success_rate = (stats['successful_stt'] / max(stats['total_interactions'], 1)) * 100
+            st.metric("Success Rate", f"{success_rate:.1f}%")
     
-    # Initialize chat history
-    if 'chat_history' not in st.session_state:
-        st.session_state.chat_history = []
-        # Add welcome message
-        welcome_msg = st.session_state.chatbot.get_welcome_message()
-        st.session_state.chat_history.append({
-            'role': 'assistant',
-            'content': welcome_msg,
-            'timestamp': datetime.now()
-        })
-        # Add system status message
-        st.session_state.chat_history.append({
-            'role': 'system',
-            'content': '🌙 Dark mode activated. All systems ready. Your privacy is protected.',
-            'timestamp': datetime.now()
-        })
+    st.markdown('</div>', unsafe_allow_html=True)
+
+def get_latency_class(latency: float) -> str:
+    """Get CSS class for latency indicator"""
+    if latency < 5:
+        return "latency-good"
+    elif latency < 10:
+        return "latency-ok"
+    elif latency < 20:
+        return "latency-poor"
+    else:
+        return "latency-bad"
+
+
+def process_voice_input(audio_bytes: bytes):
+    """Process voice input synchronously"""
+    try:
+        # Since we now use sync functions, we can call directly
+        process_voice_input_sync(audio_bytes)
+    except Exception as e:
+        logger.error(f"Error in voice processing: {e}")
+        st.error(f"Voice processing error: {str(e)}")
+
+def process_voice_input_sync(audio_bytes: bytes):
+    """Process voice input synchronously"""
+    try:
+        # Convert speech to text
+        stt_result = sync_speech_to_text(audio_bytes)
+        
+        if not stt_result["success"]:
+            st.error(f"Speech recognition failed: {stt_result.get('error', 'Unknown error')}")
+            return
+        
+        user_text = stt_result["text"]
+        if not user_text.strip():
+            st.warning("No speech detected. Please try again.")
+            return
+        
+        # Update statistics
+        st.session_state.voice_stats['total_interactions'] += 1
+        st.session_state.voice_stats['successful_stt'] += 1
+        
+        # Display transcription
+        st.markdown(f'<div class="user-message">🎤 **You said:** {user_text}</div>', unsafe_allow_html=True)
+        
+        # Process with chatbot (with conversation history for memory)
+        with st.spinner("جاري التفكير... | Thinking..."):
+            response = st.session_state.chatbot.get_response(
+                user_text, 
+                chat_history=st.session_state.messages,  # Pass conversation history
+                conversation_id=st.session_state.conversation_id
+            )
+        
+        # Generate speech response
+        with st.spinner("جاري تحويل الرد إلى صوت... | Converting to speech..."):
+            tts_result = sync_text_to_speech(response["response"])
+        
+        if tts_result["success"]:
+            # Display bot response with audio
+            st.markdown(f'<div class="bot-message">🤖 **Assistant:** {response["response"]}</div>', unsafe_allow_html=True)
+            
+            # Play audio response
+            st.audio(tts_result["audio_data"], format="audio/wav")
+            
+            st.session_state.voice_stats['successful_tts'] += 1
+        else:
+            # Fallback to text-only response
+            st.markdown(f'<div class="bot-message">🤖 **Assistant:** {response["response"]}</div>', unsafe_allow_html=True)
+            st.warning(f"Voice synthesis failed: {tts_result.get('error', 'Unknown error')}")
+        
+        # Handle crisis detection
+        if response.get("crisis_detected", False):
+            display_voice_crisis_alert(response.get("safety_info", {}))
+        
+        # Update conversation history
+        st.session_state.messages.append({"role": "user", "content": user_text, "type": "voice"})
+        st.session_state.messages.append({"role": "assistant", "content": response["response"], "type": "voice"})
+        
+        # Update latency statistics (fix calculation to use actual processing times)
+        stt_time = stt_result.get("processing_time", 0)  # Actual STT processing time
+        response_time = response.get("response_time", 0)  # AI response time
+        tts_time = tts_result.get("processing_time", 0)  # Actual TTS processing time
+        
+        total_latency = stt_time + response_time + tts_time
+        current_avg = st.session_state.voice_stats['avg_latency']
+        total_interactions = st.session_state.voice_stats['total_interactions']
+        
+        # Only update if we have valid timing data
+        if total_latency > 0:
+            st.session_state.voice_stats['avg_latency'] = ((current_avg * (total_interactions - 1)) + total_latency) / total_interactions
+        
+    except Exception as e:
+        logger.error(f"Voice processing error: {e}")
+        st.error(f"Voice processing failed: {str(e)}")
+
+def display_voice_crisis_alert(safety_info: Dict[str, Any]):
+    """Display crisis alert for voice interactions"""
+    st.markdown("""
+    <div class="voice-crisis-alert">
+        <h2>🚨 EMERGENCY DETECTED | تم اكتشاف حالة طوارئ</h2>
+        <h3>Immediate Help Available | المساعدة الفورية متاحة</h3>
+        <p><strong>Oman Emergency: 9999</strong></p>
+        <p><strong>You are not alone. Professional help is available.</strong></p>
+        <p><strong>أنت لست وحدك. المساعدة المهنية متاحة.</strong></p>
+    </div>
+    """, unsafe_allow_html=True)
     
-    # Chat interface
-    st.markdown("## 💬 Chat Interface")
+    # Auto-play emergency audio message
+    try:
+        emergency_text = "هذه حالة طوارئ. اتصل بالرقم 9999 للحصول على المساعدة الفورية."
+        tts_result = sync_text_to_speech(emergency_text)
+        
+        if tts_result["success"]:
+            st.audio(tts_result["audio_data"], format="audio/wav", autoplay=True)
+    except:
+        pass  # Fail silently for emergency audio
+
+def render_conversation_history():
+    """Render conversation history with voice indicators"""
+    st.markdown("### 💬 Conversation History | سجل المحادثة")
     
-    # Display chat history
-    chat_container = st.container()
-    with chat_container:
-        for message in st.session_state.chat_history:
-            if message['role'] == 'user':
-                st.markdown(f"""
-                <div class="chat-message user-message">
-                    <strong>You ({message['timestamp'].strftime('%H:%M')}):</strong><br>
-                    {message['content']}
-                </div>
-                """, unsafe_allow_html=True)
-            elif message['role'] == 'assistant':
-                st.markdown(f"""
-                <div class="chat-message bot-message">
-                    <strong>Assistant ({message['timestamp'].strftime('%H:%M')}):</strong><br>
-                    {message['content']}
-                </div>
-                """, unsafe_allow_html=True)
-            elif message['role'] == 'system':
-                st.markdown(f"""
-                <div class="chat-message system-message">
-                    <strong>System ({message['timestamp'].strftime('%H:%M')}):</strong><br>
-                    {message['content']}
-                </div>
-                """, unsafe_allow_html=True)
-            elif message['role'] == 'warning':
-                st.markdown(f"""
-                <div class="chat-message warning-message">
-                    <strong>Warning ({message['timestamp'].strftime('%H:%M')}):</strong><br>
-                    {message['content']}
-                </div>
-                """, unsafe_allow_html=True)
-            elif message['role'] == 'error':
-                st.markdown(f"""
-                <div class="chat-message error-message">
-                    <strong>Error ({message['timestamp'].strftime('%H:%M')}):</strong><br>
-                    {message['content']}
-                </div>
-                """, unsafe_allow_html=True)
-            elif message['role'] == 'transcription':
-                st.markdown(f"""
-                <div class="chat-message transcription">
-                    <strong>Transcribed ({message['timestamp'].strftime('%H:%M')}):</strong><br>
-                    {message['content']}
-                </div>
-                """, unsafe_allow_html=True)
+    for message in st.session_state.messages[-10:]:  # Show last 10 messages
+        is_voice = message.get("type") == "voice"
+        voice_icon = "🎤" if is_voice else "⌨️"
+        
+        if message["role"] == "user":
+            st.markdown(f"""
+            <div class="user-message">
+                <span class="voice-indicator">{voice_icon}</span>
+                <strong>You:</strong> {message["content"]}
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown(f"""
+            <div class="bot-message">
+                <span class="voice-indicator">{voice_icon}</span>
+                <strong>Assistant:</strong> {message["content"]}
+            </div>
+            """, unsafe_allow_html=True)
+
+def render_text_fallback():
+    """Render text input as fallback option"""
+    st.markdown("### ⌨️ Text Input (Fallback) | الإدخال النصي")
     
-    # Quick action buttons
-    st.markdown("### 🎯 Quick Start")
-    st.markdown("**Choose a topic to begin your conversation:**")
+    user_input = st.text_input(
+        "Type your message | اكتب رسالتك:",
+        key="text_input",
+        placeholder="How are you feeling today? | كيف تشعر اليوم؟"
+    )
+    
+    if st.button("Send Message | إرسال الرسالة") and user_input:
+        # Process text input (with conversation history for memory)
+        with st.spinner("Processing... | جاري المعالجة..."):
+            response = st.session_state.chatbot.get_response(
+                user_input, 
+                chat_history=st.session_state.messages,  # Pass conversation history
+                conversation_id=st.session_state.conversation_id
+            )
+        
+        # Display response
+        st.markdown(f'<div class="user-message">⌨️ **You:** {user_input}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="bot-message">🤖 **Assistant:** {response["response"]}</div>', unsafe_allow_html=True)
+        
+        # Handle crisis detection
+        if response.get("crisis_detected", False):
+            display_voice_crisis_alert(response.get("safety_info", {}))
+        
+        # Update conversation history
+        st.session_state.messages.append({"role": "user", "content": user_input, "type": "text"})
+        st.session_state.messages.append({"role": "assistant", "content": response["response"], "type": "text"})
+        
+        # Clear input
+        st.session_state.text_input = ""
+
+def render_quick_actions():
+    """Render quick action buttons with voice support"""
+    st.markdown("### ⚡ Quick Actions | إجراءات سريعة")
     
     col1, col2, col3 = st.columns(3)
     
-    with col1:
-        if st.button("😰 I'm feeling anxious", key="anxiety_btn", help="Get support for anxiety and worry"):
-            user_input = "I'm feeling anxious and worried. Can you help me?"
-            process_user_input(user_input)
-            st.rerun()
+    quick_actions = [
+        ("😟 Feeling anxious", "أشعر بالقلق"),
+        ("😢 Feeling sad", "أشعر بالحزن"),
+        ("😰 Having panic", "أعاني من نوبة هلع"),
+        ("🤲 Need Islamic guidance", "أحتاج إرشاد إسلامي"),
+        ("💭 Negative thoughts", "أفكار سلبية"),
+        ("🆘 Crisis help", "أحتاج مساعدة فورية")
+    ]
     
-    with col2:
-        if st.button("😴 Having trouble sleeping", key="sleep_btn", help="Get tips for better sleep"):
-            user_input = "I'm having trouble sleeping and my mind is racing at night."
-            process_user_input(user_input)
-            st.rerun()
-    
-    with col3:
-        if st.button("💼 Work stress", key="work_btn", help="Manage work-related stress"):
-            user_input = "I'm feeling overwhelmed with work stress. What can I do?"
-            process_user_input(user_input)
-            st.rerun()
-    
-    # Additional quick buttons row
-    col4, col5, col6 = st.columns(3)
-    
-    with col4:
-        if st.button("💭 Need someone to talk", key="talk_btn", help="General emotional support"):
-            user_input = "I just need someone to talk to about how I'm feeling."
-            process_user_input(user_input)
-            st.rerun()
-    
-    with col5:
-        if st.button("🕌 Faith and healing", key="faith_btn", help="Islamic perspective on healing"):
-            user_input = "Can you help me understand healing and patience from an Islamic perspective?"
-            process_user_input(user_input)
-            st.rerun()
-    
-    with col6:
-        if st.button("🤲 Need guidance", key="guidance_btn", help="Spiritual guidance and support"):
-            user_input = "I'm looking for guidance and spiritual support in difficult times."
-            process_user_input(user_input)
-            st.rerun()
-    
-    # Text input
-    st.markdown("### ✏️ Type your message")
-    user_input = st.text_area(
-        "Share what's on your mind...",
-        placeholder="Type your thoughts, feelings, or questions here...",
-        height=100,
-        key="user_input"
-    )
-    
-    # Send button
-    col1, col2, col3 = st.columns([1, 1, 3])
-    with col1:
-        send_button = st.button("Send 📤", type="primary")
-    with col2:
-        clear_button = st.button("Clear Chat 🗑️")
-    
-    # Process input
-    if send_button and user_input.strip():
-        process_user_input(user_input.strip())
-        st.rerun()
-    
-    # Clear chat
-    if clear_button:
-        st.session_state.chat_history = []
-        # Add welcome message back
-        welcome_msg = st.session_state.chatbot.get_welcome_message()
-        st.session_state.chat_history.append({
-            'role': 'assistant',
-            'content': welcome_msg,
-            'timestamp': datetime.now()
-        })
-        # Add system status message
-        st.session_state.chat_history.append({
-            'role': 'system',
-            'content': '🌙 Chat cleared. Dark mode active. Ready for new conversation.',
-            'timestamp': datetime.now()
-        })
-        st.rerun()
-    
-    # Statistics in sidebar
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### 📊 Session Stats")
-    total_messages = len(st.session_state.chat_history)
-    user_messages = len([m for m in st.session_state.chat_history if m['role'] == 'user'])
-    st.sidebar.metric("Total Messages", total_messages)
-    st.sidebar.metric("Your Messages", user_messages)
-    
-    # Feedback
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### 💬 Feedback")
-    feedback = st.sidebar.text_area("How can we improve?", height=100)
-    if st.sidebar.button("Submit Feedback"):
-        st.sidebar.success("Thank you for your feedback!")
-
-def process_user_input(user_input):
-    """Process user input and get chatbot response"""
-    # Add user message to history
-    st.session_state.chat_history.append({
-        'role': 'user',
-        'content': user_input,
-        'timestamp': datetime.now()
-    })
-    
-    # Show thinking spinner
-    with st.spinner("🤖 Thinking..."):
-        try:
-            # Check for crisis indicators first
-            crisis_detected = st.session_state.chatbot.detect_crisis(user_input)
-            
-            if crisis_detected:
-                # Add crisis warning to chat
-                st.session_state.chat_history.append({
-                    'role': 'warning',
-                    'content': '🚨 Crisis support detected. Please see emergency resources.',
-                    'timestamp': datetime.now()
-                })
+    for i, (english, arabic) in enumerate(quick_actions):
+        col = [col1, col2, col3][i % 3]
+        with col:
+            if st.button(f"{english}\n{arabic}", key=f"quick_{i}"):
+                # Process quick action as voice input if enabled
+                combined_text = f"{english} - {arabic}"
                 
-                # Display crisis warning box
-                st.markdown("""
-                <div class="crisis-box">
-                    <h4>🚨 Crisis Support Detected</h4>
-                    <p>I notice you might be going through a difficult time. Please consider reaching out to a crisis helpline or emergency services if you need immediate help.</p>
-                    <p><strong>🇴🇲 Oman Emergency: 9999</strong></p>
-                    <p><strong>🌍 International Crisis Line: Text HOME to 741741</strong></p>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            # Get response from chatbot
-            response = st.session_state.chatbot.get_response(
-                user_input, 
-                st.session_state.chat_history
-            )
-            
-            # Add bot response to history
-            st.session_state.chat_history.append({
-                'role': 'assistant',
-                'content': response,
-                'timestamp': datetime.now()
-            })
-            
-        except Exception as e:
-            error_response = f"I apologize, but I'm having trouble responding right now. Error: {str(e)}"
-            st.session_state.chat_history.append({
-                'role': 'error',
-                'content': error_response,
-                'timestamp': datetime.now()
-            })
+                if st.session_state.voice_enabled:
+                    # Generate TTS for the quick action
+                    try:
+                        tts_result = sync_text_to_speech(arabic)
+                        
+                        if tts_result["success"]:
+                            st.audio(tts_result["audio_data"], format="audio/wav")
+                    except:
+                        pass
+                
+                # Process with chatbot (with conversation history for memory)
+                response = st.session_state.chatbot.get_response(
+                    combined_text, 
+                    chat_history=st.session_state.messages,  # Pass conversation history
+                    conversation_id=st.session_state.conversation_id
+                )
+                
+                # Display and process response
+                st.markdown(f'<div class="user-message">⚡ **Quick Action:** {combined_text}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="bot-message">🤖 **Assistant:** {response["response"]}</div>', unsafe_allow_html=True)
+                
+                # Generate voice response if enabled
+                if st.session_state.voice_enabled:
+                    try:
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        tts_result = loop.run_until_complete(generate_speech_output(response["response"]))
+                        loop.close()
+                        
+                        if tts_result["success"]:
+                            st.audio(tts_result["audio_data"], format="audio/wav")
+                    except:
+                        pass
+
+def main():
+    """Main application function"""
+    # Apply dark theme
+    st.markdown(DARK_THEME_CSS, unsafe_allow_html=True)
     
-    # Clear the input
-    st.session_state.user_input = ""
+    # Initialize session state
+    initialize_session_state()
+    
+    # App header
+    st.markdown("""
+    <div style="text-align: center; padding: 20px;">
+        <h1 style="color: #00FF88;">🎤 المساعد النفسي العماني الصوتي</h1>
+        <h2 style="color: #00AAFF;">Omani Voice Mental Health Assistant</h2>
+        <p style="color: #CCCCCC;">AI-powered voice assistant for mental health support in Omani Arabic</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Sidebar
+    with st.sidebar:
+        st.markdown("## 🔧 Settings | الإعدادات")
+        
+        # Voice toggle
+        st.session_state.voice_enabled = st.checkbox(
+            "Enable Voice Interface | تفعيل الواجهة الصوتية",
+            value=st.session_state.voice_enabled
+        )
+        
+        # Language selection
+        language = st.selectbox(
+            "Interface Language | لغة الواجهة",
+            ["العربية العمانية (Omani Arabic)", "English", "Both | كلاهما"],
+            index=2
+        )
+        
+        # Model selection
+        model = st.selectbox(
+            "AI Model | نموذج الذكاء الاصطناعي",
+            ["gpt-3.5-turbo", "gpt-4", "claude-3-sonnet"],
+            index=0
+        )
+        
+        # Voice service test
+        if st.button("Test Voice Service | اختبار الخدمة الصوتية"):
+            status = test_voice_setup()
+            if status["success"]:
+                st.success("✅ Voice service working")
+            else:
+                st.error(f"❌ Error: {status['error']}")
+        
+        # Clear conversation
+        if st.button("Clear Conversation | مسح المحادثة"):
+            st.session_state.messages = []
+            st.session_state.conversation_id = f"session_{int(time.time())}"
+            st.success("Conversation cleared | تم مسح المحادثة")
+    
+    # Main content area
+    if st.session_state.voice_enabled:
+        render_voice_controls()
+        st.markdown("---")
+    
+    # Quick actions
+    render_quick_actions()
+    st.markdown("---")
+    
+    # Text fallback
+    render_text_fallback()
+    st.markdown("---")
+    
+    # Conversation history
+    render_conversation_history()
+    
+    # Footer
+    st.markdown("""
+    <div style="text-align: center; padding: 20px; color: #666666;">
+        <p>🔒 Privacy-first design | تصميم يحمي الخصوصية</p>
+        <p>For emergencies, call 9999 | للطوارئ، اتصل على 9999</p>
+    </div>
+    """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main() 

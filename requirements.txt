@@ -1,35 +1,36 @@
-# Omani Mental Health Chatbot - Voice-Enabled Requirements
-streamlit>=1.28.0
-python-dotenv>=1.0.0
-requests>=2.31.0
+# Voice-Only Omani Arabic Mental Health Chatbot
+# Essential Dependencies Only
 
-# LangChain packages (newer versions for better Python 3.13 compatibility)
-langchain>=0.2.0
-langchain-openai>=0.2.0
-langchain-anthropic>=0.2.0
-langchain-core>=0.2.0
+# Streamlit App
+streamlit>=1.32.0
+streamlit-mic-recorder>=0.0.5
 
-# Direct API packages (fallback support)
-openai>=1.0.0
-anthropic>=0.7.0
-
-# Azure Speech Services for Voice Interface
+# Speech Processing
+openai-whisper>=20231117
 azure-cognitiveservices-speech>=1.34.0
-azure-identity>=1.15.0
 
-# Audio processing and WebSocket support
-soundfile>=0.12.1
+# AI Models
+openai>=1.12.0
+anthropic>=0.18.0
+
+# Audio Processing
+pydub>=0.25.1
 numpy>=1.24.0
-websockets>=11.0
+soundfile>=0.12.1
+
+# Environment & Config
+python-dotenv>=1.0.0
+pydantic>=2.6.0
+pydantic-settings>=2.1.0
+
+# Utilities
+requests>=2.31.0
 asyncio-throttle>=1.0.2
 
-# Additional Streamlit components for voice
-streamlit-webrtc>=0.47.0
-streamlit-mic-recorder>=0.0.4
+# Azure Deployment
+azure-identity>=1.15.0
+azure-keyvault-secrets>=4.7.0
 
-# Dual-Model Validation System Dependencies
-dataclasses-json>=0.6.0  # For structured data handling
-pydantic>=2.0.0  # For data validation
-asyncio-mqtt>=0.16.0  # For async operations 
-streamlit-webrtc
-streamlit-mic-recorder
+# Mental Health & Cultural Processing
+langdetect>=1.0.9
+emoji>=2.10.1 

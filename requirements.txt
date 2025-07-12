@@ -1,4 +1,5 @@
-# Lightweight requirements for Azure deployment
+# Omani Arabic Mental Health Chatbot - Azure Deployment
+# Core Dependencies
 streamlit>=1.32.0
 openai>=1.12.0
 anthropic>=0.18.0
@@ -8,8 +9,28 @@ pydantic-settings>=2.1.0
 requests>=2.31.0
 numpy>=1.24.0
 
-# Remove heavy dependencies that cause Azure build timeouts:
-# - openai-whisper (too large)
-# - azure-cognitiveservices-speech (complex dependencies)
-# - pydub (needs ffmpeg)
-# - soundfile (needs system libraries)
+# Speech Processing (optimized for Azure)
+openai-whisper>=20231117
+azure-cognitiveservices-speech>=1.34.0
+
+# Audio Processing (lighter versions)
+pydub>=0.25.1
+soundfile>=0.12.1
+
+# Additional dependencies for audio processing
+librosa>=0.10.0
+scipy>=1.11.0
+
+# Utilities (restored)
+asyncio-throttle>=1.0.2
+
+# Azure deployment support
+azure-identity>=1.15.0
+azure-keyvault-secrets>=4.7.0
+
+# Mental Health & Cultural Processing  
+langdetect>=1.0.9
+emoji>=2.10.1
+
+# Audio recording support for Streamlit
+streamlit-mic-recorder>=0.0.5

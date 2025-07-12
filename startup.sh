@@ -1,41 +1,32 @@
 #!/bin/bash
 
-# Voice-Only Omani Arabic Mental Health Chatbot
-# Azure App Service Startup Script
+# Azure App Service startup script for Streamlit
+echo "🚀 Starting Omani Mental Health Chatbot..."
 
-echo "🧠 Starting Omani Mental Health Chatbot..."
-
-# Set Python path
-export PYTHONPATH="${PYTHONPATH}:/home/site/wwwroot"
-
-# Install FFmpeg for audio processing (if not available)
-if ! command -v ffmpeg &> /dev/null; then
-    echo "Installing FFmpeg..."
-    apt-get update
-    apt-get install -y ffmpeg
-fi
-
-# Install system dependencies for audio processing
-apt-get install -y libsndfile1
-
-# Set Streamlit configuration
-export STREAMLIT_SERVER_PORT=8000
-export STREAMLIT_SERVER_ADDRESS=localhost
-export STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+# Set environment variables for Streamlit
+export STREAMLIT_SERVER_PORT=${PORT:-8000}
+export STREAMLIT_SERVER_ADDRESS=0.0.0.0
+export STREAMLIT_SERVER_HEADLESS=true
 export STREAMLIT_SERVER_ENABLE_CORS=false
-export STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION=false
 
-# Set application configuration
-export APP_NAME="Omani Mental Health Assistant"
-export MAX_RESPONSE_TIME=15
-export ENABLE_CRISIS_DETECTION=true
-export PRIMARY_LANGUAGE=ar-OM
-export CULTURAL_CONTEXT=gulf_arab
+# Create Streamlit config directory if it doesn't exist
+mkdir -p ~/.streamlit
 
-# Create logs directory
-mkdir -p /home/site/wwwroot/logs
+# Create Streamlit config file
+cat > ~/.streamlit/config.toml << EOF
+[server]
+port = ${PORT:-8000}
+address = "0.0.0.0"
+headless = true
+enableCORS = false
+enableXsrfProtection = false
+maxUploadSize = 10
 
-# Start the Streamlit application
-echo "🚀 Starting Streamlit server on port 8000..."
-cd /home/site/wwwroot
-python -m streamlit run app.py --server.port=8000 --server.address=localhost --server.enableCORS=false --server.enableXsrfProtection=false 
+[browser]
+gatherUsageStats = false
+EOF
+
+echo "✅ Starting Streamlit application on port ${PORT:-8000}..."
+
+# Start Streamlit
+streamlit run app.py --server.port=${PORT:-8000} --server.address=0.0.0.0 --server.headless=true 

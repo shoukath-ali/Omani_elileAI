@@ -1,3 +1,4 @@
+```mermaid
 graph TB
     A[👤 User] --> B[🎤 Voice Input]
     B --> C[📱 Streamlit App<br/>app.py]
@@ -39,3 +40,4 @@ graph TB
     style K fill:#f1f8e9
     style Q fill:#ffebee
     style R fill:#ffcdd2
+```

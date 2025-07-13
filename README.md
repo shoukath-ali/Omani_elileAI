@@ -4,40 +4,221 @@
 
 A comprehensive mental health support chatbot that communicates exclusively through voice in Omani Arabic dialect, providing culturally sensitive, therapeutic-grade conversations with real-time speech processing capabilities.
 
-## 🌟 Key Features
+## 🎯 Project Overview
 
-### 🎤 Voice-Only Interface
-- **Whisper STT**: Advanced speech-to-text using OpenAI Whisper
-- **Azure TTS**: Natural Omani Arabic voice synthesis
-- **Real-time Processing**: <20 seconds end-to-end latency
-- **Cultural Authenticity**: Authentic Omani Arabic dialect
+This application provides mental health support through voice-only interactions in Omani Arabic, featuring:
+- **Real-time voice processing** with <20 second response times
+- **Cultural authenticity** with Omani Arabic dialect and Islamic counseling principles
+- **Dual-model AI system** (GPT-4o + Claude) for safety and cultural sensitivity
+- **Crisis detection** with automatic emergency support
+- **Privacy-first** design with no conversation data storage
 
-### 🤖 Dual-Model AI System
-- **Primary**: GPT-4o for conversational responses
-- **Validation**: Claude Opus 4 for cultural sensitivity
-- **Smart Fallback**: Seamless model switching
-- **Crisis Detection**: Automatic emergency support
+## 🏗️ System Architecture
 
-### 🕌 Cultural Integration
-- **Islamic Values**: Religiously sensitive counseling
-- **Gulf Culture**: Understanding of Omani social norms
-- **Family Dynamics**: Culturally appropriate guidance
-- **Traditional Wisdom**: Integration of Islamic counseling
+### Main System Flow
+```mermaid
+graph TB
+    A[👤 User] --> B[🎤 Voice Input]
+    B --> C[📱 Streamlit App<br/>app.py]
+    C --> D[🧠 Mental Health Bot<br/>mental_health_bot.py]
+    
+    D --> E[🎙️ Speech Service<br/>speech_service.py]
+    E --> F[🔊 Whisper STT<br/>OpenAI API]
+    F --> G[📝 Arabic Text]
+    
+    G --> H[🤖 AI Service<br/>ai_service.py]
+    H --> I[🧭 GPT-4o<br/>Primary Response]
+    H --> J[🛡️ Claude Opus<br/>Cultural Validation]
+    
+    K[⚙️ Config<br/>config.py] --> D
+    K --> E
+    K --> H
+    
+    I --> L[📋 Crisis Detection]
+    J --> L
+    L --> M[🔄 Response Validation]
+    
+    M --> N[🔊 Azure TTS<br/>Omani Arabic Voice]
+    N --> O[🎵 Audio Response]
+    O --> C
+    C --> P[🔊 Audio Playback]
+    P --> A
+    
+    Q[🚨 Crisis Alert] --> R[📞 Emergency Contacts<br/>9999, 24673000]
+    L --> Q
+    
+    S[📊 Session Management] --> D
+    T[🛠️ System Testing] --> D
+    
+    style A fill:#e1f5fe
+    style C fill:#f3e5f5
+    style D fill:#e8f5e8
+    style H fill:#fff3e0
+    style E fill:#fce4ec
+    style K fill:#f1f8e9
+    style Q fill:#ffebee
+    style R fill:#ffcdd2
+```
 
-### 🆘 Safety & Security
-- **Crisis Intervention**: Automated risk assessment
-- **Emergency Protocols**: Direct emergency service integration
-- **Data Protection**: Privacy-first architecture
-- **Professional Standards**: HIPAA-compliant handling
+### Voice Processing Pipeline
+```mermaid
+flowchart TD
+    A[🎤 User Speaks<br/>Omani Arabic] --> B[📹 Audio Recording<br/>streamlit-mic-recorder]
+    B --> C[🔍 Audio Validation<br/>Min 1000 bytes]
+    
+    C --> D{📏 Audio Size<br/>Check}
+    D -->|Too Small| E[❌ Error: No Speech<br/>Duration & Volume Info]
+    D -->|Valid| F[⬆️ Upload to Whisper<br/>OpenAI API]
+    
+    F --> G[🔊 Speech-to-Text<br/>Arabic Recognition]
+    G --> H{📝 Text Valid?}
+    H -->|Empty| I[❌ Error: No Speech<br/>+ Audio Analysis]
+    H -->|Valid| J[✅ Arabic Text<br/>Extracted]
+    
+    J --> K[🤖 AI Processing<br/>GPT-4o + Claude]
+    K --> L[🔍 Crisis Detection<br/>Arabic & Mixed Keywords]
+    
+    L --> M{🚨 Crisis<br/>Detected?}
+    M -->|Yes| N[🚨 Emergency Response<br/>+ Crisis Resources]
+    M -->|No| O[💬 Normal Response<br/>Cultural Context]
+    
+    N --> P[🔊 Azure TTS<br/>Omani Voice Synthesis]
+    O --> P
+    
+    P --> Q[🎵 Audio Response<br/>ar-OM-AyshaNeural]
+    Q --> R[📱 Streamlit Playback<br/>User Interface]
+    R --> S[👤 User Hears<br/>Response]
+    
+    T[📊 Performance Metrics<br/>Response Time: <20s] --> U[📈 Session Stats<br/>Conversation Count]
+    K --> T
+    
+    V[🔒 Privacy Protection<br/>No Data Storage] --> W[🗑️ Auto-Cleanup<br/>Session End]
+    S --> V
+    
+    style A fill:#e3f2fd
+    style G fill:#f3e5f5
+    style K fill:#e8f5e8
+    style M fill:#fff3e0
+    style N fill:#ffebee
+    style P fill:#fce4ec
+    style T fill:#f1f8e9
+    style V fill:#e0f2f1
+```
+
+### AI Service Decision Flow
+```mermaid
+flowchart TD
+    A[📝 User Message<br/>Arabic/Mixed Text] --> B[🔍 Code-Switching<br/>Detection]
+    B --> C[🚨 Crisis Keywords<br/>Analysis]
+    
+    C --> D{🆘 Crisis<br/>Detected?}
+    D -->|Yes| E[🚨 Crisis Mode<br/>Enhanced Prompts]
+    D -->|No| F[💬 Normal Mode<br/>Therapeutic Context]
+    
+    E --> G[🤖 GPT-4o Primary<br/>Crisis Response]
+    F --> H[🤖 GPT-4o Primary<br/>Normal Response]
+    
+    G --> I[🛡️ Claude Validation<br/>Crisis Safety Check]
+    H --> J[🛡️ Claude Validation<br/>Cultural Sensitivity]
+    
+    I --> K{✅ Claude<br/>Validation?}
+    J --> L{✅ Claude<br/>Validation?}
+    
+    K -->|Pass| M[✅ Final Crisis Response<br/>+ Emergency Resources]
+    K -->|Fail| N[🔄 Claude Override<br/>Safer Response]
+    
+    L -->|Pass| O[✅ Final Normal Response<br/>+ Cultural Context]
+    L -->|Fail| P[🔄 Claude Override<br/>More Appropriate]
+    
+    M --> Q[📋 Emergency Contacts<br/>Added to Response]
+    N --> Q
+    O --> R[🕌 Cultural Enhancements<br/>Islamic Context]
+    P --> R
+    
+    Q --> S[📊 Crisis Logging<br/>Session Statistics]
+    R --> T[📈 Normal Logging<br/>Response Metrics]
+    
+    S --> U[🔊 TTS Processing<br/>Urgent Voice Tone]
+    T --> V[🔊 TTS Processing<br/>Calm Voice Tone]
+    
+    U --> W[🎵 Audio Response<br/>With Crisis Support]
+    V --> X[🎵 Audio Response<br/>With Therapeutic Guidance]
+    
+    Y[⚙️ Configuration] --> Z[🌍 Cultural Settings<br/>Gulf Arab Context]
+    Y --> AA[🎭 Therapeutic Approach<br/>CBT + Islamic]
+    Y --> BB[🗣️ Voice Settings<br/>Omani Arabic Neural]
+    
+    Z --> H
+    AA --> H
+    BB --> V
+    BB --> U
+    
+    style A fill:#e3f2fd
+    style C fill:#fff3e0
+    style D fill:#ffebee
+    style G fill:#f3e5f5
+    style I fill:#e8f5e8
+    style Q fill:#ffcdd2
+    style Y fill:#f1f8e9
+    style W fill:#fce4ec
+    style X fill:#e1f5fe
+```
+
+## 📁 Project Structure
+
+```
+Omani_elileAI/
+├── app.py                    # Main Streamlit application & UI
+├── mental_health_bot.py      # Core bot logic & session management
+├── ai_service.py            # GPT-4o + Claude dual-model AI
+├── speech_service.py        # Whisper STT + Azure TTS
+├── config.py               # Configuration & cultural settings
+├── requirements.txt        # Python dependencies
+├── startup.sh             # Azure deployment script
+├── README.md              # This documentation
+└── .github/workflows/     # GitHub Actions for deployment
+```
+
+### Core Components
+
+#### 🧠 Mental Health Bot (`mental_health_bot.py`)
+- **Main coordination** between all services
+- **Session management** and statistics tracking
+- **Crisis detection** and intervention protocols
+- **Performance monitoring** and system health checks
+
+#### 🤖 AI Service (`ai_service.py`)
+- **GPT-4o primary model** for conversational responses
+- **Claude Opus validation** for cultural sensitivity
+- **Crisis keyword detection** in Arabic, English, and mixed language
+- **Code-switching support** for natural Arabic-English mixing
+
+#### 🎙️ Speech Service (`speech_service.py`)
+- **Whisper STT** using OpenAI API for Arabic speech recognition
+- **Azure Neural TTS** with authentic Omani Arabic voices
+- **Audio processing** and format conversion
+- **Performance optimization** for <20 second response times
+
+#### 📱 Streamlit App (`app.py`)
+- **Voice recording interface** using streamlit-mic-recorder
+- **Real-time conversation display** with audio playback
+- **Session statistics** and system status monitoring
+- **Crisis alert handling** with emergency contact display
+
+#### ⚙️ Configuration (`config.py`)
+- **Environment-based settings** with Pydantic validation
+- **Cultural context parameters** for Gulf Arab traditions
+- **Crisis keywords** in Arabic, English, and mixed language
+- **Therapeutic approaches** adapted for Islamic counseling
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 - Python 3.8+
-- OpenAI API Key
-- Anthropic API Key
-- Azure Speech Services Key
-- Microphone access
+- OpenAI API Key (for Whisper STT and GPT-4o)
+- Anthropic API Key (for Claude validation)
+- Azure Speech Services Key (for TTS)
+- Microphone access for voice input
 
 ### Installation
 
@@ -65,221 +246,183 @@ export AZURE_SPEECH_REGION="eastus"
 streamlit run app.py
 ```
 
-## 🏗️ Architecture
+## 🌟 Key Features
 
-```
-Voice Input → Whisper STT → GPT-4o + Claude → Azure TTS → Voice Output
-     ↓              ↓           ↓              ↓         ↓
-  Audio Bytes → Arabic Text → AI Response → SSML → Audio Bytes
-```
+### 🎤 Voice-Only Interface
+- **Real-time speech processing** with <20 second latency
+- **Omani Arabic dialect** recognition and synthesis
+- **Audio quality optimization** for clear communication
+- **Microphone integration** with streamlit-mic-recorder
 
-### Core Components
+### 🤖 Dual-Model AI System
+- **GPT-4o primary responses** for natural conversation
+- **Claude Opus cultural validation** for appropriateness
+- **Smart fallback mechanisms** for service availability
+- **Crisis detection algorithms** with emergency protocols
 
-#### 📁 File Structure
-```
-Omani_elileAI/
-├── app.py                    # Main Streamlit application
-├── config.py                 # Configuration management
-├── speech_service.py         # Whisper STT + Azure TTS
-├── ai_service.py            # GPT-4o + Claude dual model
-├── mental_health_bot.py     # Main bot coordination
-├── requirements.txt         # Dependencies
-└── README.md               # Documentation
-```
+### 🕌 Cultural Integration
+- **Islamic counseling principles** integrated into responses
+- **Gulf Arab cultural context** understanding
+- **Code-switching support** for Arabic-English mixing
+- **Traditional wisdom** incorporation in therapeutic guidance
 
-#### 🔧 Services
+### 🆘 Safety & Crisis Support
+- **Automatic crisis detection** in multiple languages
+- **Emergency contact integration** (Police: 9999, Mental Health: 24673000)
+- **Professional referral protocols** for severe cases
+- **Privacy-first architecture** with no data retention
 
-1. **Speech Service** (`speech_service.py`)
-   - Whisper-based speech recognition
-   - Azure Neural TTS for Omani Arabic
-   - Audio format conversion and optimization
-
-2. **AI Service** (`ai_service.py`)
-   - GPT-4o primary response generation
-   - Claude Opus 4 cultural validation
-   - Crisis detection algorithms
-
-3. **Mental Health Bot** (`mental_health_bot.py`)
-   - Main conversation coordination
-   - Therapeutic context management
-   - Session statistics and monitoring
-
-## 🎯 Usage
-
-### 🎤 Voice Interaction Flow
-
-1. **🗣️ Speak**: Click microphone and speak in Omani Arabic
-2. **📝 Recognize**: See your speech converted to text
-3. **🤖 Process**: AI generates culturally appropriate response
-4. **🔊 Listen**: Hear response in authentic Omani Arabic
-5. **💬 Continue**: Natural conversation flow maintained
-
-### 📊 Session Management
-
-- **Real-time Stats**: Response times and performance metrics
-- **Crisis Monitoring**: Automatic detection and intervention
-- **Cultural Adaptation**: Context-aware therapeutic responses
-- **Privacy Protection**: No conversation data retention
-
-## 🌍 Cultural Sensitivity
-
-### 🕌 Islamic Integration
-- Quranic references when appropriate
-- Dua and dhikr recommendations
-- Halal therapeutic approaches
-- Family and community values
-
-### 🇴🇲 Omani Context
-- Local cultural norms and expectations
-- Traditional wisdom integration
-- Community support emphasis
-- Regional dialect authenticity
-
-## 🆘 Crisis Support
-
-### 🚨 Emergency Detection
-- Automatic keyword monitoring
-- Risk assessment algorithms
-- Immediate intervention protocols
-- Professional referral systems
-
-### 📞 Emergency Contacts
-- **Police**: 9999
-- **Mental Health Hotline**: 24673000
-- **Ministry of Health**: 24602077
-
-## 🔧 Configuration
+## 🔧 Configuration Options
 
 ### Environment Variables
 ```bash
-# AI Services
+# Required API Keys
 OPENAI_API_KEY=your_openai_api_key
 ANTHROPIC_API_KEY=your_anthropic_api_key
-
-# Azure Speech
 AZURE_SPEECH_KEY=your_azure_speech_key
 AZURE_SPEECH_REGION=eastus
 
-# Application Settings
+# Optional Application Settings
 MAX_RESPONSE_TIME=15
 ENABLE_CRISIS_DETECTION=true
 PRIMARY_LANGUAGE=ar-OM
 CULTURAL_CONTEXT=gulf_arab
+THERAPEUTIC_APPROACH=cbt_islamic
+
+# Voice Configuration
+TTS_VOICE_FEMALE=ar-OM-AyshaNeural
+TTS_VOICE_MALE=ar-OM-AbdullahNeural
+WHISPER_MODEL=base
 ```
 
-### Voice Configuration
-- **Primary Voice**: ar-OM-AyshaNeural (Female)
-- **Fallback Voice**: ar-OM-AbdullahNeural (Male)
-- **Whisper Model**: base (configurable)
-- **TTS Quality**: High neural synthesis
+### Cultural Settings
+- **Primary Language**: ar-OM (Omani Arabic)
+- **Fallback Language**: ar-SA (Saudi Arabic)
+- **Cultural Context**: gulf_arab
+- **Therapeutic Approach**: cbt_islamic (CBT + Islamic counseling)
 
 ## 📈 Performance Targets
 
-### ⚡ Latency Requirements
+### ⚡ Response Time Metrics
 - **Total Response Time**: <20 seconds
-- **STT Processing**: <3 seconds
-- **AI Generation**: <10 seconds
-- **TTS Synthesis**: <5 seconds
+- **Speech-to-Text**: <3 seconds
+- **AI Processing**: <10 seconds
+- **Text-to-Speech**: <5 seconds
+- **Audio Playback**: <2 seconds
 
-### 🎯 Quality Metrics
-- **Speech Recognition**: >95% accuracy
-- **Cultural Appropriateness**: Expert validated
-- **Crisis Detection**: <1% false positives
-- **User Satisfaction**: Therapeutic-grade quality
+### 🎯 Quality Standards
+- **Speech Recognition Accuracy**: >95% for Omani Arabic
+- **Crisis Detection Sensitivity**: <1% false positives
+- **Cultural Appropriateness**: Expert-validated responses
+- **User Experience**: Therapeutic-grade conversation quality
 
 ## 🚀 Deployment
 
-### Azure App Service
+### Azure App Service (Production)
 
+The application is configured for deployment on Azure App Service using the included `startup.sh` script and GitHub Actions workflow.
+
+#### Deployment Steps:
 1. **Create Azure resources**
+2. **Configure environment variables** in Azure portal
+3. **Deploy using GitHub Actions** (automated on push to main)
+
+### Local Development
 ```bash
-az group create --name omani-mental-health-rg --location eastus
-az appservice plan create --name omani-bot-plan --resource-group omani-mental-health-rg --sku B1
-az webapp create --name omani-mental-health-bot --resource-group omani-mental-health-rg --plan omani-bot-plan
+# Install dependencies
+pip install -r requirements.txt
+
+# Set environment variables
+export OPENAI_API_KEY="your_key"
+export ANTHROPIC_API_KEY="your_key"
+export AZURE_SPEECH_KEY="your_key"
+
+# Run locally
+streamlit run app.py
 ```
 
-2. **Configure environment variables**
-```bash
-az webapp config appsettings set --name omani-mental-health-bot --resource-group omani-mental-health-rg --settings OPENAI_API_KEY="your_key" ANTHROPIC_API_KEY="your_key" AZURE_SPEECH_KEY="your_key"
-```
-
-3. **Deploy application**
-```bash
-az webapp deployment source config --name omani-mental-health-bot --resource-group omani-mental-health-rg --repo-url <your-repo> --branch main --manual-integration
-```
-
-## 🔒 Security & Privacy
+## 🔒 Privacy & Security
 
 ### Data Protection
-- **No Conversation Storage**: Sessions cleared after completion
-- **Encrypted Communication**: TLS 1.3 for all API calls
-- **Local Processing**: Minimal cloud data transmission
-- **Audit Logging**: Crisis events only (with consent)
+- **No conversation storage** - all data cleared after session
+- **Encrypted API communication** - TLS 1.3 for all external calls
+- **Local processing** - minimal cloud data transmission
+- **Session isolation** - unique IDs with automatic cleanup
 
 ### Compliance
-- **HIPAA-Ready**: Healthcare data protection standards
-- **Cultural Ethics**: Islamic counseling guidelines
-- **Professional Standards**: Licensed mental health practices
-- **Regional Regulations**: Oman healthcare compliance
+- **HIPAA-ready architecture** for healthcare data protection
+- **Islamic ethics compliance** in counseling approaches
+- **Regional privacy laws** adherence for Oman
+- **Professional standards** aligned with licensed mental health practices
 
-## 🧪 Testing
+## 🧪 Testing & Validation
 
-### Test Scenarios
-1. **General Anxiety**: Everyday stress and worry counseling
-2. **Family Issues**: Culturally sensitive relationship guidance
-3. **Work Stress**: Career and professional development support
-4. **Crisis Intervention**: Emergency mental health support
-5. **Code-Switching**: Arabic-English mixed conversations
-
-### Performance Validation
+### System Health Check
 ```bash
-# Test system components
-python -c "from mental_health_bot import test_bot_system; print(test_bot_system())"
-
-# Test voice services
-python -c "from speech_service import test_speech_services; print(test_speech_services())"
+# Test all system components
+streamlit run app.py
+# Click "Test System" in sidebar
 ```
+
+### Manual Testing Scenarios
+1. **General anxiety** conversations in Omani Arabic
+2. **Family relationship** discussions with cultural context
+3. **Work stress** scenarios with Islamic counseling
+4. **Crisis situations** with emergency protocol activation
+5. **Code-switching** conversations mixing Arabic and English
+
+### Performance Monitoring
+- **Real-time response time** tracking
+- **Session statistics** and conversation counts
+- **Crisis detection** logging and validation
+- **System health** continuous monitoring
 
 ## 🤝 Contributing
 
 ### Development Guidelines
-1. **Cultural Sensitivity**: All contributions must respect Islamic and Omani values
-2. **Mental Health Standards**: Therapeutic-grade quality requirements
-3. **Code Quality**: Comprehensive testing and documentation
-4. **Privacy First**: No unnecessary data collection or storage
+1. **Cultural sensitivity** must be maintained in all contributions
+2. **Mental health standards** - therapeutic-grade quality required
+3. **Privacy first** - no unnecessary data collection
+4. **Performance targets** - maintain <20 second response times
+5. **Testing required** - validate all changes with real scenarios
 
-### Areas for Contribution
-- 🌍 **Localization**: Additional Gulf Arabic dialects
-- 🧠 **Therapy Techniques**: Advanced CBT adaptations
-- 🔊 **Voice Quality**: Enhanced TTS naturalness
-- 📱 **Platform Expansion**: Mobile app development
+### Code Structure
+- **Clean architecture** with separated concerns
+- **Async processing** for performance optimization
+- **Error handling** with graceful degradation
+- **Logging** for monitoring and debugging
 
-## 📜 License
+## 📞 Emergency Support
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+### Crisis Intervention
+When crisis keywords are detected, the system automatically:
+- Activates enhanced crisis response protocols
+- Provides emergency contact information
+- Offers immediate coping strategies
+- Logs the interaction for follow-up (with consent)
 
-## 🙏 Acknowledgments
+### Emergency Contacts (Oman)
+- **Police**: 9999
+- **Mental Health Hotline**: 24673000
+- **Ministry of Health**: 24602077
 
-- **OpenAI**: Whisper STT and GPT-4o model
-- **Anthropic**: Claude Opus 4 validation system
-- **Microsoft Azure**: Neural TTS services
-- **Oman Ministry of Health**: Mental health guidelines
-- **Islamic Counseling Community**: Cultural adaptation guidance
+## 🔮 Future Enhancements
 
-## 📞 Support
+### Planned Features
+- **Multi-dialect support** for other Gulf Arabic variants
+- **Family therapy modes** for group sessions
+- **Integration with healthcare providers** for referrals
+- **Mobile app development** for better accessibility
+- **Advanced analytics** for therapy effectiveness tracking
 
-For technical support or mental health emergencies:
-
-### 🆘 Emergency Support
-- **Oman Emergency**: 9999
-- **Mental Health Crisis**: 24673000
-
-### 💬 Technical Support
-- **Documentation**: [GitHub Issues](issues)
-- **Community**: [Discussions](discussions)
-- **Professional Consultation**: Available on request
+### Technical Improvements
+- **Edge computing** for faster response times
+- **Offline mode** for areas with poor connectivity
+- **Voice biometrics** for personalized experiences
+- **Advanced NLP** for better emotion detection
 
 ---
 
-**Built with ❤️ for the mental health and wellness of the Omani community**
-**تم تطويره بحب لدعم الصحة النفسية والعافية للمجتمع العماني** 
+**Built with ❤️ for the Omani community | بُني بحب للمجتمع العماني**
+
+*This project aims to provide accessible, culturally appropriate mental health support through innovative voice technology while respecting Islamic values and Omani traditions.* 

@@ -61,7 +61,7 @@ class SpeechService:
     
     async def speech_to_text(self, audio_data: bytes) -> Dict[str, Any]:
         """
-        Convert speech to text using OpenAI Whisper API
+        Convert speech to text using OpenAI Whisper API with code-switching support
         
         Args:
             audio_data: Raw audio bytes
@@ -106,9 +106,21 @@ class SpeechService:
                                 "audio_volume": avg_volume
                             }
                         
-                        # Check if audio is too quiet
+                        # Check if audio is too quiet (likely noise or silence)
                         if avg_volume < 0.001:
-                            logger.warning(f"⚠️ Audio very quiet: {avg_volume:.4f} - may affect transcription")
+                            logger.warning(f"⚠️ Audio very quiet: {avg_volume:.4f} - may cause incorrect language detection")
+                            return {
+                                "success": False,
+                                "error": f"Audio too quiet ({avg_volume:.4f}) - please speak louder and closer to microphone",
+                                "text": "",
+                                "processing_time": asyncio.get_event_loop().time() - start_time,
+                                "audio_duration": duration_seconds,
+                                "audio_volume": avg_volume
+                            }
+                        
+                        # Check if audio is too long (might contain multiple segments that confuse detection)
+                        if duration_seconds > 30:
+                            logger.warning(f"⚠️ Audio very long: {duration_seconds:.1f}s - may affect language detection accuracy")
                             
                     except Exception as audio_analysis_error:
                         logger.warning(f"Could not analyze audio: {audio_analysis_error}")
@@ -120,53 +132,117 @@ class SpeechService:
                     temp_file.write(audio_data)
                     temp_file.flush()
                     
-                    # Transcribe using OpenAI Whisper API
-                    with open(temp_file.name, "rb") as audio_file:
-                        transcript = self.openai_client.audio.transcriptions.create(
-                            model="whisper-1",
-                            file=audio_file,
-                            language="ar",  # Arabic
-                            response_format="text"
-                        )
+                    # Try code-switching aware transcription (auto-detect language)
+                    logger.info("🌐 Attempting code-switching transcription...")
+                    transcribed_text = ""
+                    detected_language = "unknown"
                     
-                    processing_time = asyncio.get_event_loop().time() - start_time
-                    transcribed_text = transcript.strip() if isinstance(transcript, str) else transcript.text.strip()
-                    
-                    # Enhanced empty text handling - try English if Arabic failed
-                    if not transcribed_text:
-                        logger.info("🔄 Arabic transcription empty, trying English...")
+                    try:
+                        # First attempt: Auto-detect language for code-switching
                         with open(temp_file.name, "rb") as audio_file:
-                            transcript_en = self.openai_client.audio.transcriptions.create(
+                            transcript = self.openai_client.audio.transcriptions.create(
                                 model="whisper-1",
                                 file=audio_file,
-                                language="en",  # English
-                                response_format="text"
+                                # No language parameter = auto-detect
+                                response_format="verbose_json"
                             )
                         
-                        transcribed_text = transcript_en.strip() if isinstance(transcript_en, str) else transcript_en.text.strip()
+                        transcribed_text = transcript.text.strip()
+                        detected_language = transcript.language if hasattr(transcript, 'language') else "auto-detected"
                         
-                        if transcribed_text:
-                            logger.info(f"✅ English transcription succeeded: '{transcribed_text[:50]}...'")
-                        else:
-                            return {
-                                "success": False,
-                                "error": f"No speech detected - Duration: {duration_seconds:.1f}s, Volume: {avg_volume:.4f}. Try speaking louder and longer.",
-                                "text": "",
-                                "processing_time": processing_time,
-                                "audio_duration": duration_seconds,
-                                "audio_volume": avg_volume,
-                                "whisper_info": "Both Arabic and English transcription returned empty"
-                            }
+                        # FILTER OUT INCORRECT LANGUAGE DETECTIONS
+                        # Only accept Arabic, English, or unknown detections
+                        expected_languages = ["ar", "en", "arabic", "english", "auto-detected", "unknown"]
+                        
+                        if detected_language.lower() not in expected_languages:
+                            logger.warning(f"⚠️ Unexpected language detected: {detected_language} - forcing fallback")
+                            # Clear the result to force Arabic/English fallback
+                            transcribed_text = ""
+                            detected_language = f"filtered-out-{detected_language}"
+                        elif transcribed_text:
+                            # Additional validation: reject very short or nonsensical results
+                            if len(transcribed_text.strip()) < 2:
+                                logger.warning(f"⚠️ Transcription too short ({len(transcribed_text)} chars) - trying fallback")
+                                transcribed_text = ""
+                            # Reject common Whisper artifacts/noise patterns
+                            elif transcribed_text.strip().lower() in ["uh", "um", "ah", "mm", "hm", ".", "!", "?", " "]:
+                                logger.warning(f"⚠️ Transcription appears to be noise/artifact: '{transcribed_text}' - trying fallback")
+                                transcribed_text = ""
+                            else:
+                                logger.info(f"✅ Auto-detect transcription: lang={detected_language}, text='{transcribed_text[:50]}...'")
+                        
+                    except Exception as auto_error:
+                        logger.warning(f"Auto-detect transcription failed: {auto_error}")
+                    
+                    # If auto-detect failed or empty, try Arabic-focused
+                    if not transcribed_text:
+                        logger.info("🔄 Trying Arabic-focused transcription...")
+                        try:
+                            with open(temp_file.name, "rb") as audio_file:
+                                transcript = self.openai_client.audio.transcriptions.create(
+                                    model="whisper-1",
+                                    file=audio_file,
+                                    language="ar",  # Arabic
+                                    response_format="text"
+                                )
+                            
+                            transcribed_text = transcript.strip() if isinstance(transcript, str) else transcript.text.strip()
+                            detected_language = "ar"
+                            
+                            if transcribed_text:
+                                logger.info(f"✅ Arabic transcription succeeded: '{transcribed_text[:50]}...'")
+                        
+                        except Exception as ar_error:
+                            logger.warning(f"Arabic transcription failed: {ar_error}")
+                    
+                    # If still empty, try English as final fallback
+                    if not transcribed_text:
+                        logger.info("🔄 Trying English fallback...")
+                        try:
+                            with open(temp_file.name, "rb") as audio_file:
+                                transcript = self.openai_client.audio.transcriptions.create(
+                                    model="whisper-1",
+                                    file=audio_file,
+                                    language="en",  # English
+                                    response_format="text"
+                                )
+                            
+                            transcribed_text = transcript.strip() if isinstance(transcript, str) else transcript.text.strip()
+                            detected_language = "en"
+                            
+                            if transcribed_text:
+                                logger.info(f"✅ English transcription succeeded: '{transcribed_text[:50]}...'")
+                        
+                        except Exception as en_error:
+                            logger.warning(f"English transcription failed: {en_error}")
+                    
+                    # Final check - if still empty, return error
+                    if not transcribed_text:
+                        return {
+                            "success": False,
+                            "error": f"No speech detected in any language - Duration: {duration_seconds:.1f}s, Volume: {avg_volume:.4f}. Try speaking louder and longer.",
+                            "text": "",
+                            "processing_time": asyncio.get_event_loop().time() - start_time,
+                            "audio_duration": duration_seconds,
+                            "audio_volume": avg_volume,
+                            "whisper_info": "Auto-detect, Arabic, and English transcription all returned empty"
+                        }
+                    
+                    # Detect code-switching patterns
+                    is_codeswitching = self._detect_codeswitching(transcribed_text)
+                    
+                    processing_time = asyncio.get_event_loop().time() - start_time
                     
                     return {
                         "success": True,
                         "text": transcribed_text,
-                        "language": "ar" if not transcribed_text else "auto-detected",
+                        "language": detected_language,
+                        "is_codeswitching": is_codeswitching,
                         "confidence": 0.95,  # OpenAI Whisper API doesn't provide confidence scores
                         "processing_time": processing_time,
                         "audio_duration": duration_seconds,
                         "audio_volume": avg_volume,
-                        "api_used": "openai-whisper-api"
+                        "api_used": "openai-whisper-api-codeswitching"
                     }
                 
                 finally:
@@ -253,16 +329,82 @@ class SpeechService:
             }
     
     def _create_ssml(self, text: str, voice_name: str) -> str:
-        """Create SSML for better Arabic pronunciation"""
-        return f"""
-        <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="ar-OM">
-            <voice name="{voice_name}">
-                <prosody rate="0.9" pitch="medium">
-                    {text}
-                </prosody>
-            </voice>
-        </speak>
+        """Create enhanced SSML for better Arabic pronunciation and code-switching support"""
+        
+        # Detect if text contains code-switching
+        has_arabic = any('\u0600' <= char <= '\u06FF' for char in text)
+        has_english = any(char.isalpha() and ord(char) < 128 for char in text)
+        is_codeswitching = has_arabic and has_english
+        
+        if is_codeswitching:
+            logger.info("🌐 Creating code-switching SSML")
+            
+            # For code-switching, create enhanced SSML with language switching
+            # This helps Azure TTS handle mixed content better
+            ssml_text = f"""
+            <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="ar-OM">
+                <voice name="{voice_name}">
+                    <prosody rate="0.85" pitch="medium">
+                        {self._enhance_codeswitching_ssml(text)}
+                    </prosody>
+                </voice>
+            </speak>
+            """
+        else:
+            # Standard SSML for Arabic-only content
+            ssml_text = f"""
+            <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="ar-OM">
+                <voice name="{voice_name}">
+                    <prosody rate="0.9" pitch="medium">
+                        {text}
+                    </prosody>
+                </voice>
+            </speak>
+            """
+        
+        return ssml_text
+    
+    def _enhance_codeswitching_ssml(self, text: str) -> str:
         """
+        Enhance SSML for code-switching text to improve pronunciation
+        
+        Args:
+            text: Mixed Arabic-English text
+            
+        Returns:
+            Enhanced SSML with language tags
+        """
+        import re
+        
+        # Common English words/phrases that should be marked
+        english_patterns = [
+            r'\b(I|you|me|my|your|the|and|or|but|so|very|really|actually|basically|literally)\b',
+            r'\b(okay|ok|yeah|yes|no|hello|hi|bye|thank you|thanks|sorry|excuse me)\b',
+            r'\b(family|work|job|school|university|hospital|doctor|teacher|student)\b',
+            r'\b(happy|sad|angry|tired|stressed|worried|excited|disappointed)\b',
+            r'\b(today|tomorrow|yesterday|now|later|morning|afternoon|evening|night)\b',
+            r'\b(problem|solution|situation|feeling|emotion|thought|idea|plan)\b'
+        ]
+        
+        enhanced_text = text
+        
+        # Mark common English words with language tags for better pronunciation
+        for pattern in english_patterns:
+            enhanced_text = re.sub(
+                pattern, 
+                lambda m: f'<lang xml:lang="en-US">{m.group()}</lang>',
+                enhanced_text,
+                flags=re.IGNORECASE
+            )
+        
+        # Add slight pauses around language switches for more natural flow
+        enhanced_text = re.sub(
+            r'(<lang xml:lang="en-US">.*?</lang>)',
+            r'<break time="0.1s"/>\1<break time="0.1s"/>',
+            enhanced_text
+        )
+        
+        return enhanced_text
     
     def test_services(self) -> Dict[str, Any]:
         """Test both STT and TTS services"""
@@ -306,6 +448,43 @@ class SpeechService:
             logger.error(f"Service test error: {e}")
         
         return results
+
+    def _detect_codeswitching(self, text: str) -> bool:
+        """
+        Detect if text contains Arabic-English code-switching patterns
+        
+        Args:
+            text: Transcribed text to analyze
+            
+        Returns:
+            Boolean indicating if code-switching is detected
+        """
+        if not text:
+            return False
+        
+        # Simple heuristic: check if text contains both Arabic and English characters
+        has_arabic = any('\u0600' <= char <= '\u06FF' for char in text)
+        has_english = any(char.isalpha() and ord(char) < 128 for char in text)
+        
+        # Additional check for common code-switching patterns
+        from config import CODESWITCHING_PATTERNS
+        
+        text_lower = text.lower()
+        codeswitching_indicators = 0
+        
+        # Check for common code-switching patterns
+        for category, patterns in CODESWITCHING_PATTERNS.items():
+            for pattern in patterns:
+                if pattern.lower() in text_lower:
+                    codeswitching_indicators += 1
+        
+        # If we have both Arabic and English, or multiple code-switching indicators
+        is_mixed = (has_arabic and has_english) or codeswitching_indicators >= 2
+        
+        if is_mixed:
+            logger.info(f"🌐 Code-switching detected: AR={has_arabic}, EN={has_english}, indicators={codeswitching_indicators}")
+        
+        return is_mixed
 
 # Global speech service instance
 speech_service = SpeechService()

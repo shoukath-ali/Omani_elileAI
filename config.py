@@ -60,6 +60,13 @@ CRISIS_KEYWORDS_EN = [
     "thinking about death", "want to disappear", "can't go on"
 ]
 
+# Code-switching crisis patterns (Arabic-English mixed)
+CRISIS_KEYWORDS_MIXED = [
+    "I want to انتحار", "أريد أن أموت really", "لا أستطيع anymore", 
+    "سأنهي my life", "thinking about الموت", "can't go on بعد اليوم",
+    "want to die والله", "depression شديد", "feeling hopeless يا رب"
+]
+
 # Omani Arabic cultural context
 OMANI_CULTURAL_PHRASES = {
     "greeting": "السلام عليكم، أهلاً وسهلاً بك",
@@ -68,12 +75,41 @@ OMANI_CULTURAL_PHRASES = {
     "religious_comfort": "الله معك، وهذا ابتلاء وراه خير"
 }
 
+# Code-switching cultural phrases (common in Gulf Arabic)
+OMANI_CODESWITCHING_PHRASES = {
+    "greeting_mixed": "مرحبا! How are you اليوم؟",
+    "comfort_mixed": "الله يعطيك العافية، I'm here to help you",
+    "encouragement_mixed": "إن شاء الله it will be okay، كلها تعدي",
+    "religious_comfort_mixed": "الله معك always، this is a test وراه خير",
+    "support_mixed": "I understand أنك تمر بوقت صعب، but you're not alone",
+    "validation_mixed": "Your feelings are valid والله، it's okay to feel this way",
+    "hope_mixed": "There is hope دائماً، الله معك في كل خطوة"
+}
+
+# Common code-switching patterns in Gulf Arabic
+CODESWITCHING_PATTERNS = {
+    "time_expressions": ["today اليوم", "tomorrow بكرة", "now الحين", "later بعدين"],
+    "feelings": ["happy مبسوط", "sad حزين", "stressed متوتر", "tired تعبان"],
+    "family": ["my family أهلي", "my mom أمي", "my dad أبوي", "my kids عيالي"],
+    "work": ["my work شغلي", "my job وظيفتي", "my boss المدير", "colleague زميل"],
+    "common_phrases": ["wallah والله", "yalla يلا", "inshallah إن شاء الله", "mashallah ماشاء الله"],
+    "transitions": ["بس but", "لكن however", "يعني I mean", "أو or"]
+}
+
 # Therapeutic techniques adapted for Islamic context
 ISLAMIC_CBT_TECHNIQUES = {
     "dua_mindfulness": "التأمل والذكر",
     "gratitude_reflection": "تأمل النعم والحمد",
     "patience_building": "بناء الصبر والتوكل",
     "community_support": "الدعم المجتمعي والأسري"
+}
+
+# Code-switching therapeutic approaches
+CODESWITCHING_CBT_TECHNIQUES = {
+    "mindfulness_mixed": "Practice mindfulness مع الذكر والدعاء",
+    "gratitude_mixed": "Count your blessings عد النعم daily",
+    "patience_mixed": "Build sabr والتوكل على الله step by step",
+    "support_mixed": "Seek help from family والأصدقاء والمجتمع"
 }
 
 # Emergency contacts for Oman

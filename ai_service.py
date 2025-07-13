@@ -1,22 +1,32 @@
 """
 Voice-Only Omani Arabic Mental Health Chatbot
-AI Service: GPT-4o + Claude Dual Model
+AI Service: GPT-4o + Claude Dual Model with Code-Switching Support
 """
 
 import logging
 import asyncio
+import re
 from typing import Dict, Any, List, Optional
 from openai import OpenAI
 from anthropic import Anthropic
 
-from config import settings, CRISIS_KEYWORDS_AR, CRISIS_KEYWORDS_EN, OMANI_CULTURAL_PHRASES
+from config import (
+    settings, 
+    CRISIS_KEYWORDS_AR, 
+    CRISIS_KEYWORDS_EN, 
+    CRISIS_KEYWORDS_MIXED,
+    OMANI_CULTURAL_PHRASES,
+    OMANI_CODESWITCHING_PHRASES,
+    CODESWITCHING_PATTERNS,
+    CODESWITCHING_CBT_TECHNIQUES
+)
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class AIService:
-    """Handles dual-model AI responses with GPT-4o primary and Claude fallback"""
+    """Handles dual-model AI responses with GPT-4o primary and Claude fallback, supporting code-switching"""
     
     def __init__(self):
         """Initialize AI services"""
@@ -26,10 +36,10 @@ class AIService:
     
     async def get_response(self, user_message: str, conversation_id: str) -> Dict[str, Any]:
         """
-        Get AI response using dual-model approach
+        Get AI response using dual-model approach with code-switching support
         
         Args:
-            user_message: User's input text
+            user_message: User's input text (may contain code-switching)
             conversation_id: Unique conversation identifier
             
         Returns:
@@ -38,17 +48,21 @@ class AIService:
         start_time = asyncio.get_event_loop().time()
         
         try:
-            # Detect crisis first
+            # Detect crisis first (includes code-switching patterns)
             crisis_detected = self._detect_crisis(user_message)
             
+            # Detect code-switching in user message
+            is_codeswitching = self._detect_codeswitching(user_message)
+            
             # Get primary response from GPT-4o
-            primary_response = await self._get_gpt_response(user_message)
+            primary_response = await self._get_gpt_response(user_message, is_codeswitching)
             
             # Validate/enhance with Claude if needed
             final_response = await self._validate_with_claude(
                 user_message, 
                 primary_response, 
-                crisis_detected
+                crisis_detected,
+                is_codeswitching
             )
             
             # Update conversation history
@@ -71,8 +85,9 @@ class AIService:
                 "success": True,
                 "response": final_response,
                 "crisis_detected": crisis_detected,
+                "is_codeswitching": is_codeswitching,
                 "processing_time": processing_time,
-                "model_used": "gpt-4o + claude-validation"
+                "model_used": "gpt-4o + claude-validation-codeswitching"
             }
             
         except Exception as e:
@@ -85,15 +100,16 @@ class AIService:
                 "success": False,
                 "response": fallback_response,
                 "crisis_detected": self._detect_crisis(user_message),
+                "is_codeswitching": self._detect_codeswitching(user_message),
                 "processing_time": asyncio.get_event_loop().time() - start_time,
                 "error": str(e),
-                "model_used": "fallback"
+                "model_used": "fallback-codeswitching"
             }
     
-    async def _get_gpt_response(self, user_message: str) -> str:
-        """Get response from GPT-4o with Omani cultural context"""
+    async def _get_gpt_response(self, user_message: str, is_codeswitching: bool = False) -> str:
+        """Get response from GPT-4o with Omani cultural context and code-switching support"""
         
-        system_prompt = self._create_system_prompt()
+        system_prompt = self._create_system_prompt(is_codeswitching)
         
         messages = [{"role": "system", "content": system_prompt}]
         
@@ -121,15 +137,26 @@ class AIService:
             logger.error(f"GPT-4o error: {e}")
             raise
     
-    async def _validate_with_claude(self, user_message: str, gpt_response: str, crisis_detected: bool) -> str:
-        """Validate and enhance GPT response with Claude"""
+    async def _validate_with_claude(self, user_message: str, gpt_response: str, crisis_detected: bool, is_codeswitching: bool = False) -> str:
+        """Validate and enhance GPT response with Claude, supporting code-switching"""
+        
+        codeswitching_context = ""
+        if is_codeswitching:
+            codeswitching_context = """
+            
+            IMPORTANT: The user is using code-switching (mixing Arabic and English), which is natural in Gulf Arabic conversation.
+            Your response should also naturally incorporate code-switching where appropriate, reflecting how educated Gulf Arabs speak.
+            Use English for modern concepts, technical terms, or when it feels natural, while maintaining Arabic for cultural and emotional expressions.
+            """
         
         validation_prompt = f"""
         As an expert in Arabic mental health counseling and Omani culture, evaluate this conversation:
 
-        User (in Arabic): {user_message}
+        User (may contain code-switching): {user_message}
         AI Response: {gpt_response}
         Crisis Detected: {crisis_detected}
+        Code-switching Detected: {is_codeswitching}
+        {codeswitching_context}
 
         Please:
         1. Ensure cultural appropriateness for Omani/Gulf context
@@ -137,6 +164,7 @@ class AIService:
         3. Check Islamic sensitivity if relevant
         4. Improve Arabic dialect authenticity
         5. Enhance crisis response if needed
+        6. If code-switching detected, respond naturally with appropriate Arabic-English mixing
 
         Provide the best possible response in Omani Arabic dialect, incorporating Islamic counseling principles where appropriate.
         Keep response under 200 words and maintain warm, supportive tone.
@@ -157,7 +185,7 @@ class AIService:
             claude_response = response.content[0].text.strip()
             
             # Use Claude's enhanced response if it's significantly better
-            if len(claude_response) > 50 and "مرحباً" in claude_response or "السلام" in claude_response:
+            if len(claude_response) > 50 and ("مرحباً" in claude_response or "السلام" in claude_response or "I understand" in claude_response):
                 return claude_response
             else:
                 return gpt_response
@@ -166,10 +194,29 @@ class AIService:
             logger.warning(f"Claude validation error: {e}")
             return gpt_response  # Fallback to GPT response
     
-    def _create_system_prompt(self) -> str:
-        """Create system prompt for Omani mental health context"""
+    def _create_system_prompt(self, is_codeswitching: bool = False) -> str:
+        """Create system prompt for Omani mental health context with code-switching support"""
+        
+        codeswitching_instructions = ""
+        if is_codeswitching:
+            codeswitching_instructions = f"""
+            
+            IMPORTANT - CODE-SWITCHING MODE:
+            The user is mixing Arabic and English naturally (code-switching), which is common in Gulf Arabic conversation.
+            You should respond in the same natural way, mixing Arabic and English appropriately:
+            
+            - Use Arabic for: emotions, cultural concepts, religious terms, greetings, comfort expressions
+            - Use English for: modern concepts, technical terms, casual phrases where natural
+            - Natural mixing examples: {OMANI_CODESWITCHING_PHRASES}
+            - Common patterns: {CODESWITCHING_PATTERNS}
+            
+            Your response should feel natural to a Gulf Arab speaker who switches between Arabic and English.
+            """
+        
         return f"""
         أنت مساعد نفسي متخصص في الثقافة العمانية والخليجية. تتحدث باللهجة العمانية وتفهم السياق الثقافي والديني للمجتمع العماني.
+        
+        {codeswitching_instructions}
 
         إرشادات مهمة:
         1. استخدم اللهجة العمانية الأصيلة في ردودك
@@ -192,7 +239,7 @@ class AIService:
         """
     
     def _detect_crisis(self, text: str) -> bool:
-        """Detect crisis keywords in Arabic and English"""
+        """Detect crisis keywords in Arabic, English, and code-switching patterns"""
         text_lower = text.lower()
         
         # Check Arabic crisis keywords
@@ -205,28 +252,82 @@ class AIService:
             if keyword in text_lower:
                 return True
         
+        # Check code-switching crisis patterns
+        for keyword in CRISIS_KEYWORDS_MIXED:
+            if keyword.lower() in text_lower:
+                return True
+        
         return False
     
+    def _detect_codeswitching(self, text: str) -> bool:
+        """Detect if text contains Arabic-English code-switching patterns"""
+        if not text:
+            return False
+        
+        # Check if text contains both Arabic and English characters
+        has_arabic = any('\u0600' <= char <= '\u06FF' for char in text)
+        has_english = any(char.isalpha() and ord(char) < 128 for char in text)
+        
+        # Check for common code-switching patterns
+        text_lower = text.lower()
+        codeswitching_indicators = 0
+        
+        for category, patterns in CODESWITCHING_PATTERNS.items():
+            for pattern in patterns:
+                if pattern.lower() in text_lower:
+                    codeswitching_indicators += 1
+        
+        # If we have both scripts or multiple indicators
+        is_mixed = (has_arabic and has_english) or codeswitching_indicators >= 2
+        
+        if is_mixed:
+            logger.info(f"🌐 Code-switching detected in AI: AR={has_arabic}, EN={has_english}, indicators={codeswitching_indicators}")
+        
+        return is_mixed
+    
     def _get_fallback_response(self, user_message: str) -> str:
-        """Generate fallback response for system errors"""
+        """Generate fallback response for system errors with code-switching support"""
+        is_codeswitching = self._detect_codeswitching(user_message)
+        
         if self._detect_crisis(user_message):
-            return f"""
-            {OMANI_CULTURAL_PHRASES['comfort']}
-            
-            أشعر بقلقك وأريدك أن تعرف أنك لست وحدك. في حالة الطوارئ، يرجى الاتصال بـ:
-            - الطوارئ: 9999
-            - الخط الساخن للصحة النفسية: 24673000
-            
-            {OMANI_CULTURAL_PHRASES['religious_comfort']}
-            """
+            if is_codeswitching:
+                return f"""
+                {OMANI_CODESWITCHING_PHRASES['comfort_mixed']}
+                
+                I can feel أنك تمر بوقت صعب وأريدك أن تعرف أنك لست وحدك. 
+                في حالة الطوارئ، please call:
+                - Emergency: 9999
+                - Mental Health Hotline: 24673000
+                
+                {OMANI_CODESWITCHING_PHRASES['religious_comfort_mixed']}
+                """
+            else:
+                return f"""
+                {OMANI_CULTURAL_PHRASES['comfort']}
+                
+                أشعر بقلقك وأريدك أن تعرف أنك لست وحدك. في حالة الطوارئ، يرجى الاتصال بـ:
+                - الطوارئ: 9999
+                - الخط الساخن للصحة النفسية: 24673000
+                
+                {OMANI_CULTURAL_PHRASES['religious_comfort']}
+                """
         else:
-            return f"""
-            {OMANI_CULTURAL_PHRASES['greeting']}
-            
-            أعتذر، واجهت مشكلة تقنية صغيرة. {OMANI_CULTURAL_PHRASES['encouragement']}
-            
-            هل يمكنك إعادة ما قلته؟ أنا هنا لأستمع إليك وأساعدك.
-            """
+            if is_codeswitching:
+                return f"""
+                {OMANI_CODESWITCHING_PHRASES['greeting_mixed']}
+                
+                Sorry، واجهت مشكلة تقنية صغيرة. {OMANI_CODESWITCHING_PHRASES['encouragement_mixed']}
+                
+                Can you repeat ما قلته؟ I'm here لأستمع إليك وأساعدك.
+                """
+            else:
+                return f"""
+                {OMANI_CULTURAL_PHRASES['greeting']}
+                
+                أعتذر، واجهت مشكلة تقنية صغيرة. {OMANI_CULTURAL_PHRASES['encouragement']}
+                
+                هل يمكنك إعادة ما قلته؟ أنا هنا لأستمع إليك وأساعدك.
+                """
     
     def clear_conversation(self):
         """Clear conversation history"""

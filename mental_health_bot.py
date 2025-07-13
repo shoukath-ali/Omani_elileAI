@@ -125,11 +125,17 @@ class OmaniMentalHealthBot:
                 "response_text": response_text,
                 "audio_data": tts_result["audio_data"],
                 "crisis_detected": crisis_detected,
+                "is_codeswitching": ai_result.get("is_codeswitching", False),
                 "processing_time": total_time,
                 "conversation_count": self.conversation_count,
                 "stt_time": stt_result.get("processing_time", 0),
                 "ai_time": ai_result.get("processing_time", 0),
-                "tts_time": tts_result.get("processing_time", 0)
+                "tts_time": tts_result.get("processing_time", 0),
+                "language_info": {
+                    "detected_language": stt_result.get("language", "unknown"),
+                    "stt_codeswitching": stt_result.get("is_codeswitching", False),
+                    "ai_codeswitching": ai_result.get("is_codeswitching", False)
+                }
             }
             
         except Exception as e:

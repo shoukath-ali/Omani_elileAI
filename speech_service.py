@@ -8,7 +8,7 @@ import logging
 import asyncio
 import tempfile
 from typing import Dict, Any, Optional
-import whisper
+from openai import OpenAI
 import azure.cognitiveservices.speech as speechsdk
 from pydub import AudioSegment
 import numpy as np
@@ -25,22 +25,21 @@ class SpeechService:
     
     def __init__(self):
         """Initialize speech services"""
-        self.whisper_model = None
+        self.openai_client = None
         self.azure_speech_config = None
         self.azure_synthesizer = None
         self._initialize_services()
     
     def _initialize_services(self):
-        """Initialize Whisper and Azure Speech services"""
+        """Initialize OpenAI Whisper API and Azure Speech services"""
         try:
-            # Initialize Whisper
-            if settings.openai_api_key:  # Whisper can work without API key for local models
-                logger.info(f"Loading Whisper model: {settings.whisper_model}")
-                self.whisper_model = whisper.load_model(settings.whisper_model)
-                logger.info("Whisper model loaded successfully")
+            # Initialize OpenAI Whisper API
+            if settings.openai_api_key:
+                self.openai_client = OpenAI(api_key=settings.openai_api_key)
+                logger.info("OpenAI Whisper API client initialized successfully")
             else:
-                logger.warning("OpenAI API key not provided - Whisper STT will be limited")
-                self.whisper_model = None
+                logger.warning("OpenAI API key not provided - STT will be disabled")
+                self.openai_client = None
             
             # Initialize Azure Speech
             if settings.azure_speech_key:
@@ -62,7 +61,7 @@ class SpeechService:
     
     async def speech_to_text(self, audio_data: bytes) -> Dict[str, Any]:
         """
-        Convert speech to text using Whisper
+        Convert speech to text using OpenAI Whisper API
         
         Args:
             audio_data: Raw audio bytes
@@ -71,19 +70,19 @@ class SpeechService:
             Dict with transcription results
         """
         try:
-            if not self.whisper_model:
+            if not self.openai_client:
                 return {
                     "success": False,
-                    "error": "Whisper STT not available - OpenAI API key required",
+                    "error": "OpenAI Whisper API not available - API key required",
                     "text": "",
                     "processing_time": 0
                 }
             
             start_time = asyncio.get_event_loop().time()
             
-            # Convert audio data to temporary file
+            # Convert audio data to temporary file for API upload
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
-                # Process audio with pydub
+                # Process audio with pydub for quality analysis
                 audio_segment = AudioSegment.from_file(io.BytesIO(audio_data))
                 
                 # Audio quality analysis
@@ -108,7 +107,7 @@ class SpeechService:
                 if avg_volume < -50:
                     logger.warning(f"⚠️ Audio very quiet: {avg_volume:.1f}dBFS - may affect transcription")
                 
-                # Convert to format expected by Whisper (16kHz, mono)
+                # Convert to format optimized for API (16kHz, mono)
                 audio_segment = audio_segment.set_frame_rate(16000).set_channels(1)
                 
                 # Normalize audio volume if too quiet
@@ -118,36 +117,33 @@ class SpeechService:
                 
                 audio_segment.export(temp_file.name, format="wav")
                 
-                # Transcribe with Whisper with improved options
-                result = self.whisper_model.transcribe(
-                    temp_file.name,
-                    language="ar",  # Arabic
-                    task="transcribe",
-                    no_speech_threshold=0.4,  # Lower threshold for better detection
-                    logprob_threshold=-1.0,   # Allow lower confidence transcriptions
-                    compression_ratio_threshold=2.4,  # More lenient compression
-                    condition_on_previous_text=False  # Don't rely on previous context
-                )
+                # Transcribe using OpenAI Whisper API
+                with open(temp_file.name, "rb") as audio_file:
+                    transcript = self.openai_client.audio.transcriptions.create(
+                        model="whisper-1",
+                        file=audio_file,
+                        language="ar",  # Arabic
+                        response_format="text"
+                    )
                 
                 processing_time = asyncio.get_event_loop().time() - start_time
-                transcribed_text = result["text"].strip()
+                transcribed_text = transcript.strip() if isinstance(transcript, str) else transcript.text.strip()
                 
-                # Enhanced empty text handling
+                # Enhanced empty text handling - try English if Arabic failed
                 if not transcribed_text:
-                    # Try English if Arabic failed
                     logger.info("🔄 Arabic transcription empty, trying English...")
-                    result_en = self.whisper_model.transcribe(
-                        temp_file.name,
-                        language="en",
-                        task="transcribe",
-                        no_speech_threshold=0.3,
-                        logprob_threshold=-1.0
-                    )
-                    transcribed_text = result_en["text"].strip()
+                    with open(temp_file.name, "rb") as audio_file:
+                        transcript_en = self.openai_client.audio.transcriptions.create(
+                            model="whisper-1",
+                            file=audio_file,
+                            language="en",  # English
+                            response_format="text"
+                        )
+                    
+                    transcribed_text = transcript_en.strip() if isinstance(transcript_en, str) else transcript_en.text.strip()
                     
                     if transcribed_text:
                         logger.info(f"✅ English transcription succeeded: '{transcribed_text[:50]}...'")
-                        result = result_en
                     else:
                         return {
                             "success": False,
@@ -162,15 +158,16 @@ class SpeechService:
                 return {
                     "success": True,
                     "text": transcribed_text,
-                    "language": result.get("language", "ar"),
-                    "confidence": 0.95,  # Whisper doesn't provide confidence scores
+                    "language": "ar" if not transcribed_text else "auto-detected",
+                    "confidence": 0.95,  # OpenAI Whisper API doesn't provide confidence scores
                     "processing_time": processing_time,
                     "audio_duration": duration_seconds,
-                    "audio_volume": avg_volume
+                    "audio_volume": avg_volume,
+                    "api_used": "openai-whisper-api"
                 }
                 
         except Exception as e:
-            logger.error(f"Speech-to-text error: {e}")
+            logger.error(f"OpenAI Whisper API error: {e}")
             return {
                 "success": False,
                 "error": str(e),

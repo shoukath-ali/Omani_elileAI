@@ -7,10 +7,10 @@ import io
 import logging
 import asyncio
 import tempfile
+import os
 from typing import Dict, Any, Optional
 from openai import OpenAI
 import azure.cognitiveservices.speech as speechsdk
-from pydub import AudioSegment
 import numpy as np
 import soundfile as sf
 
@@ -80,91 +80,101 @@ class SpeechService:
             
             start_time = asyncio.get_event_loop().time()
             
-            # Convert audio data to temporary file for API upload
+            # Create temporary file for API upload
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
-                # Process audio with pydub for quality analysis
-                audio_segment = AudioSegment.from_file(io.BytesIO(audio_data))
-                
-                # Audio quality analysis
-                duration_ms = len(audio_segment)
-                duration_seconds = duration_ms / 1000.0
-                avg_volume = audio_segment.dBFS
-                
-                logger.info(f"🎵 Audio analysis: {duration_seconds:.1f}s, {avg_volume:.1f}dBFS")
-                
-                # Check minimum duration
-                if duration_seconds < 0.5:
-                    return {
-                        "success": False,
-                        "error": f"Audio too short ({duration_seconds:.1f}s) - minimum 0.5 seconds required",
-                        "text": "",
-                        "processing_time": asyncio.get_event_loop().time() - start_time,
-                        "audio_duration": duration_seconds,
-                        "audio_volume": avg_volume
-                    }
-                
-                # Check if audio is too quiet
-                if avg_volume < -50:
-                    logger.warning(f"⚠️ Audio very quiet: {avg_volume:.1f}dBFS - may affect transcription")
-                
-                # Convert to format optimized for API (16kHz, mono)
-                audio_segment = audio_segment.set_frame_rate(16000).set_channels(1)
-                
-                # Normalize audio volume if too quiet
-                if avg_volume < -30:
-                    audio_segment = audio_segment.normalize()
-                    logger.info("🔊 Audio normalized for better recognition")
-                
-                audio_segment.export(temp_file.name, format="wav")
-                
-                # Transcribe using OpenAI Whisper API
-                with open(temp_file.name, "rb") as audio_file:
-                    transcript = self.openai_client.audio.transcriptions.create(
-                        model="whisper-1",
-                        file=audio_file,
-                        language="ar",  # Arabic
-                        response_format="text"
-                    )
-                
-                processing_time = asyncio.get_event_loop().time() - start_time
-                transcribed_text = transcript.strip() if isinstance(transcript, str) else transcript.text.strip()
-                
-                # Enhanced empty text handling - try English if Arabic failed
-                if not transcribed_text:
-                    logger.info("🔄 Arabic transcription empty, trying English...")
+                try:
+                    # Simple audio analysis using soundfile (no FFmpeg required)
+                    try:
+                        # Try to read audio data for basic analysis
+                        with io.BytesIO(audio_data) as audio_buffer:
+                            data, sample_rate = sf.read(audio_buffer)
+                            
+                        # Basic audio analysis
+                        duration_seconds = len(data) / sample_rate
+                        avg_volume = np.mean(np.abs(data)) if len(data) > 0 else 0
+                        
+                        logger.info(f"🎵 Audio analysis: {duration_seconds:.1f}s, sample_rate: {sample_rate}Hz")
+                        
+                        # Check minimum duration
+                        if duration_seconds < 0.5:
+                            return {
+                                "success": False,
+                                "error": f"Audio too short ({duration_seconds:.1f}s) - minimum 0.5 seconds required",
+                                "text": "",
+                                "processing_time": asyncio.get_event_loop().time() - start_time,
+                                "audio_duration": duration_seconds,
+                                "audio_volume": avg_volume
+                            }
+                        
+                        # Check if audio is too quiet
+                        if avg_volume < 0.001:
+                            logger.warning(f"⚠️ Audio very quiet: {avg_volume:.4f} - may affect transcription")
+                            
+                    except Exception as audio_analysis_error:
+                        logger.warning(f"Could not analyze audio: {audio_analysis_error}")
+                        # Continue anyway - OpenAI Whisper API can handle various formats
+                        duration_seconds = 0
+                        avg_volume = 0
+                    
+                    # Write audio data directly to temporary file
+                    temp_file.write(audio_data)
+                    temp_file.flush()
+                    
+                    # Transcribe using OpenAI Whisper API
                     with open(temp_file.name, "rb") as audio_file:
-                        transcript_en = self.openai_client.audio.transcriptions.create(
+                        transcript = self.openai_client.audio.transcriptions.create(
                             model="whisper-1",
                             file=audio_file,
-                            language="en",  # English
+                            language="ar",  # Arabic
                             response_format="text"
                         )
                     
-                    transcribed_text = transcript_en.strip() if isinstance(transcript_en, str) else transcript_en.text.strip()
+                    processing_time = asyncio.get_event_loop().time() - start_time
+                    transcribed_text = transcript.strip() if isinstance(transcript, str) else transcript.text.strip()
                     
-                    if transcribed_text:
-                        logger.info(f"✅ English transcription succeeded: '{transcribed_text[:50]}...'")
-                    else:
-                        return {
-                            "success": False,
-                            "error": f"No speech detected - Duration: {duration_seconds:.1f}s, Volume: {avg_volume:.1f}dBFS. Try speaking louder and longer.",
-                            "text": "",
-                            "processing_time": processing_time,
-                            "audio_duration": duration_seconds,
-                            "audio_volume": avg_volume,
-                            "whisper_info": "Both Arabic and English transcription returned empty"
-                        }
+                    # Enhanced empty text handling - try English if Arabic failed
+                    if not transcribed_text:
+                        logger.info("🔄 Arabic transcription empty, trying English...")
+                        with open(temp_file.name, "rb") as audio_file:
+                            transcript_en = self.openai_client.audio.transcriptions.create(
+                                model="whisper-1",
+                                file=audio_file,
+                                language="en",  # English
+                                response_format="text"
+                            )
+                        
+                        transcribed_text = transcript_en.strip() if isinstance(transcript_en, str) else transcript_en.text.strip()
+                        
+                        if transcribed_text:
+                            logger.info(f"✅ English transcription succeeded: '{transcribed_text[:50]}...'")
+                        else:
+                            return {
+                                "success": False,
+                                "error": f"No speech detected - Duration: {duration_seconds:.1f}s, Volume: {avg_volume:.4f}. Try speaking louder and longer.",
+                                "text": "",
+                                "processing_time": processing_time,
+                                "audio_duration": duration_seconds,
+                                "audio_volume": avg_volume,
+                                "whisper_info": "Both Arabic and English transcription returned empty"
+                            }
+                    
+                    return {
+                        "success": True,
+                        "text": transcribed_text,
+                        "language": "ar" if not transcribed_text else "auto-detected",
+                        "confidence": 0.95,  # OpenAI Whisper API doesn't provide confidence scores
+                        "processing_time": processing_time,
+                        "audio_duration": duration_seconds,
+                        "audio_volume": avg_volume,
+                        "api_used": "openai-whisper-api"
+                    }
                 
-                return {
-                    "success": True,
-                    "text": transcribed_text,
-                    "language": "ar" if not transcribed_text else "auto-detected",
-                    "confidence": 0.95,  # OpenAI Whisper API doesn't provide confidence scores
-                    "processing_time": processing_time,
-                    "audio_duration": duration_seconds,
-                    "audio_volume": avg_volume,
-                    "api_used": "openai-whisper-api"
-                }
+                finally:
+                    # Clean up temporary file
+                    try:
+                        os.unlink(temp_file.name)
+                    except:
+                        pass
                 
         except Exception as e:
             logger.error(f"OpenAI Whisper API error: {e}")
@@ -264,12 +274,12 @@ class SpeechService:
         
         try:
             # Test Whisper
-            if self.whisper_model is not None:
+            if self.openai_client: # Check if OpenAI client is initialized
                 results["whisper_available"] = True
                 logger.info("✅ Whisper STT service available")
             
             # Test Azure TTS
-            if self.azure_speech_config is not None:
+            if self.azure_speech_config: # Check if Azure config is initialized
                 results["azure_tts_available"] = True
                 logger.info("✅ Azure TTS service available")
                 

@@ -11,8 +11,7 @@ numpy>=1.24.0
 # Speech Processing (API-based, much lighter)
 azure-cognitiveservices-speech>=1.34.0
 
-# Audio Processing (essential only)
-pydub>=0.25.1
+# Audio Processing (essential only, FFmpeg-free)
 soundfile>=0.12.1
 
 # Utilities
@@ -26,4 +25,5 @@ streamlit-mic-recorder>=0.0.5
 # Skip these heavy packages for now:
 # openai-whisper (700MB+ download, use OpenAI API instead)
 # librosa (large scipy dependencies)
+# pydub (requires FFmpeg which isn't available in Azure App Service)
 # azure-identity (not essential for basic functionality) 

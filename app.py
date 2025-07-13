@@ -1,3 +1,4 @@
+# Updated for Azure deployment - API-based version
 """
 Voice-Only Omani Arabic Mental Health Chatbot
 Main Streamlit Application

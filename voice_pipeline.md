@@ -1,3 +1,4 @@
+```mermaid
 flowchart TD
     A[🎤 User Speaks<br/>Omani Arabic] --> B[📹 Audio Recording<br/>streamlit-mic-recorder]
     B --> C[🔍 Audio Validation<br/>Min 1000 bytes]
@@ -39,3 +40,4 @@ flowchart TD
     style P fill:#fce4ec
     style T fill:#f1f8e9
     style V fill:#e0f2f1
+```
